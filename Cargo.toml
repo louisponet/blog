@@ -19,9 +19,11 @@ eframe = { version = "0.27.0", default-features = false, features = [
     "persistence",   # Enable restoring app state when restarting the app.
 ] }
 log = "0.4"
+egui_commonmark = "0.15"
 
 # You only need serde if you want app persistence:
 serde = { version = "1", features = ["derive"] }
+walkdir = "2.5.0"
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
