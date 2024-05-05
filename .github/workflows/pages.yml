@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: checkout
-      - uses: actions/checkout@v4 # repo checkout
+        uses: actions/checkout@v4 # repo checkout
 
       - name: Build and deploy
         uses: shalzz/zola-deploy-action@master
