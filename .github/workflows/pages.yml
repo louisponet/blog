@@ -14,22 +14,15 @@ on:
 permissions:
   contents: write # for committing to gh-pages branch.
 
-concurrency:
-  group: "pages"
-  cancel-in-progress: true
-
 jobs:
   build-github-pages:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3 # repo checkout
+      - name: checkout
+      - uses: actions/checkout@v4 # repo checkout
 
       - name: Build and deploy
-        uses: shalzz/zola-deploy-action@v0.17.2
+        uses: shalzz/zola-deploy-action@master
         env:
-          # Target branch
           PAGES_BRANCH: gh-pages
-          # Provide personal access token
-          # TOKEN: ${{ secrets.TOKEN }}
-          # Or if publishing to the same repo, use the automatic token
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
