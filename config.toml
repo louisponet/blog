@@ -31,6 +31,8 @@ menu = [
 
 socials = [
     { name = "github", url = "https://github.com/louisponet/", icon = "github" },
+    { name = "linkedin", url = "https://www.linkedin.com/in/louis-ponet-phd-384ba0b6/", icon = "linkedin" },
+    { name = "scholar", url = "https://scholar.google.com/citations?hl=en&user=oAp2Siow_v8C", icon = "scholar" },
 ]
 
 custom_css = []

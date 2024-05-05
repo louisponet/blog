@@ -15,13 +15,43 @@
     </ul>
 {% endmacro list_title %}
 
+{% macro tags(page, short=false) %}
+    {%- if page.taxonomies and page.taxonomies.tags %}
+        <span class="post-tags-inline">
+            {%- if short %}
+                🏷 {%- set sep = "," -%}
+            {% else %}
+                tags:&nbsp;
+                {%- set sep = "&nbsp;" -%}
+            {% endif -%}
+            {%- for tag in page.taxonomies.tags %}
+                <a class="post-tag" href="{{ get_taxonomy_url(kind='tags', name=tag) | safe }}">#{{ tag }}</a>
+                {%- if not loop.last %}{{ sep | safe }}{% endif -%}
+            {% endfor -%}
+        </span>
+    {% endif -%}
+{% endmacro tags %}
+
 {% macro list_posts(pages) %}
 <ul>
     {%- for page in pages %}
     <li class="list-item">
     <section>
         <div class="post-header">
+	        <div>
             <time>{{ page.date | date(format="%Y-%m-%d") }}</time>
+        {% if page.taxonomies and page.taxonomies.tags %}
+            <div class="post-tags">
+                <nav class="nav tags">
+                    <ul class="tags">
+                        {% for tag in page.taxonomies.tags %}
+                            <li><a href={{ get_taxonomy_url(kind='tags', name=tag) | safe }}>{{ tag }}</a></li>
+                        {% endfor %}
+                    </ul>
+                </nav>
+            </div>
+        {% endif %}
+	        </div>
 
             <div>
                 <h1 class="title">
@@ -67,24 +97,6 @@
     {% endfor -%}
     </ul>
 {% endmacro list_terms %}
-
-{% macro tags(page, short=false) %}
-    {%- if page.taxonomies and page.taxonomies.tags %}
-        <span class="post-tags-inline">
-            {%- if short %}
-                ::
-                {%- set sep = "," -%}
-            {% else %}
-                :: tags:&nbsp;
-                {%- set sep = "&nbsp;" -%}
-            {% endif -%}
-            {%- for tag in page.taxonomies.tags %}
-                <a class="post-tag" href="{{ get_taxonomy_url(kind='tags', name=tag) | safe }}">#{{ tag }}</a>
-                {%- if not loop.last %}{{ sep | safe }}{% endif -%}
-            {% endfor -%}
-        </span>
-    {% endif -%}
-{% endmacro tags %}
 
 {% macro page_header(title) %}
     <div class="page-header">
