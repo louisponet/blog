@@ -1,7 +1,7 @@
 +++
 title = "Hello World, this is Mantra"
 date = 2024-05-05
-description = "The current status and design overview of my hft trading engine, and an outline of the planned discussion topics related to it"
+description = "The current status and design overview of my hft trading engine, and an outline of the planned discussion topics related to it."
 [taxonomies]
 tags =  ["mantra", "hft"]
 +++
@@ -28,11 +28,12 @@ Let's first level the playing field with an overview of the current state of aff
 - Concurrent handling of multiple algorithms
 - Balance and order tracking accross multiple execution venues
 - Continuous **ingestion and storage** of market data streams
+- WebSocket connections to 5 crypto `Exchanges` (Binance, Bitstamp, Bitfinex, Coinbase and Kraken)
 - "In production" **backtesting** by replaying these streams, and mimic execution with a **mock exchange**
 - High-performance realtime UI for analysis of the system and marketdata, handling millions of datapoints
 - ~500k msgs/s throughput @ 0.5 - 10 microseconds internal latency
 - A focus on simplicity and **locality of behavior**
-- < 15K LOC
+- < 15K LOC (for now)
 
 # System Design Overview
 The core design has changed very little since **Mantra's** inception. It is based around message passing between a couple core systems or `Actors`.
@@ -50,10 +51,10 @@ You might ask yourself why I chose for a distributed design if I'm targeting low
 The answer is to some degree my interest in distributed systems, but mainly pragmatism.
 I only have so many resources at my disposal, which makes separating out concerns into different subsystems the obvious choice allowing each of them to handle their well-defined tasks more efficiently.
 This means I can have a single `Overseer` serve the order flow for many `TradeModels`, each handling potentially many `Instruments`. The same goes for interfaces to the `Exchanges`.
-Of course, this design also facilitates the reuse of components more readily, and having multi-consumer message queues naturally opens up the ability to attach auxiliary `Actors` that perform many supporting tasks such as **logging** without impacting the performance of the main execution path.
-Lastly, as the crypto markets are currently the main target, again unfortunately for pragmatic reasons, the vast majority of latency comes from the connection between me and the exchanges.
+The multi-consumer message queues that from the spine of the system allow to attach auxiliary `Actors` that perform many non latency critical supporting tasks such as **logging** without impacting the performance of the main execution path.
+Lastly, as **crypto markets** are currently the main target, again unfortunately for pragmatic reasons, the vast majority of latency anyway originates from the connection between me and the exchanges.
 
-Nonetheless I really strived to keep the latency given the design constrains to the absolute minimum, and **Mantra** achieves internal latencies between 400ns and 10 microseconds on an untuned arch-linux based distro running on a less than prime example of the intel 14900 K.
+Nonetheless, I really strived to keep the latency given the design constrains to the absolute minimum, and **Mantra** achieves internal latencies between 400ns and 10 microseconds on an untuned arch-linux based distro running on a less than prime example of the intel 14900 K.
 
 ## Inter Process Communication (IPC)
 
