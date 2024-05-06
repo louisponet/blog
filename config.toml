@@ -1,7 +1,7 @@
 # The URL the site will be built for
 base_url = "https://louisponet.github.io/blog"
 
-title = "Louis-Ponet"
+title = "Louis Ponet"
 description = "My Blog"
 build_search_index = false
 generate_feed = true

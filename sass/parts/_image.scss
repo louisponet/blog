@@ -3,6 +3,12 @@ img {
   max-width: 100%;
 }
 
+img[src$="#noborder"] {
+  display: block;
+  border: 0;
+  margin: 0 auto;
+}
+
 figure {
   box-sizing: border-box;
   display: inline-block;
