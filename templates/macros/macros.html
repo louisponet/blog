@@ -102,7 +102,7 @@
     <div class="page-header">
         {{ title }}<span class="primary-color" style="font-size: 1.6em">.</span>
     </div>
-{% endmacro content %}
+{% endmacro page_header %}
 
 {% macro content(page) %}
 <main>
@@ -130,7 +130,7 @@
         {% endif %}
 
         {# Optional table of contents #}
-        {% if config.extra.toc | default(value=false) %}
+        {% if page.extra.toc | default(value=true) %}
             {% if page.toc %}
                 <h1>Table of Contents</h1>
                 <ul>

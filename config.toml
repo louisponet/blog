@@ -16,7 +16,7 @@ highlight_theme = "ayu-dark"
 [extra]
 toc = true
 use_cdn = false
-favicon = "/icon/favicon.png"
+favicon = "/icon/favicon.svg"
 theme = "toggle"              # light, dark, auto, toggle
 comment = false
 mathjax = true
@@ -24,7 +24,7 @@ mathjax_dollar_inline_enable = true
 
 menu = [
     { name = "/posts", url = "/posts", weight = 1 },
-    { name = "/projects", url = "/projects", weight = 2 },
+    # { name = "/projects", url = "/projects", weight = 2 },
     { name = "/about", url = "/about", weight = 3 },
     { name = "/tags", url = "/tags", weight = 4 },
 ]
@@ -33,6 +33,7 @@ socials = [
     { name = "github", url = "https://github.com/louisponet/", icon = "github" },
     { name = "linkedin", url = "https://www.linkedin.com/in/louis-ponet-phd-384ba0b6/", icon = "linkedin" },
     { name = "scholar", url = "https://scholar.google.com/citations?hl=en&user=oAp2Siow_v8C", icon = "scholar" },
+    { name = "email", url = "mailto:louisponet@gmail.com?subject=Howdy%20from%20your%20blog", icon = "email" },
 ]
 
 custom_css = []
