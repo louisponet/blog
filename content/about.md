@@ -15,7 +15,8 @@ The final impetus for my shift towards the financial markets was an enlightening
 I've always been a fan of exciting new technologies and had been wanting to learn it for a while, so it was a no-brainer: I could get a glimpse of real-life quant finance and learn `rust`.
 
 This invaluable experience opened the doors to my next position as trading developer/market data specialist at [Bitcoin Suisse](https://bitcoinsuisse.com/), one of the leading crypto investment partners.
-There, I have been rebuilding the market data ingestion systems completely from-the-ground up, focusing on robustness and latency minimization. The languages of choice were, you guessed it, `c++` and `rust`... Perfect. As a bonus, I also got a good baptism by fire on `c#` since it comprises most of the preexisting codebase.
+There, I have been rebuilding the market data ingestion systems completely from-the-ground up, focusing on robustness and latency minimization. The languages of choice are, you guessed it, `c++` and `rust`... Perfect.
+As a bonus, I also got a good baptism by fire on `c#` since it comprises most of the preexisting codebase.
 
 In my off-time, I have kept developing my low-latency trading engine [**Mantra**](@/posts/hello_world/index.md), and I keep one foot in Academia by publishing the odd paper on condensed matter physics.
 
