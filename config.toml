@@ -9,6 +9,8 @@ compile_sass = true
 minify_html = true
 taxonomies = [{ name = "tags" }]
 
+ignored_content = ["*/target/*"]
+
 [markdown]
 highlight_code = true
 highlight_theme = "ayu-dark"
