@@ -1,6 +1,6 @@
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Barrier};
 use std::arch::x86_64::{__rdtscp, _mm_lfence};
+use std::sync::atomic::{compiler_fence, AtomicBool, Ordering};
+use std::sync::{Arc, Barrier};
 use std::time::Duration;
 
 use code::SeqLock;
@@ -14,20 +14,19 @@ use rand::Rng;
 #[repr(C)]
 struct TimingMessage<const N: usize> {
     rdtscp: Instant,
-    data: [u8;N]
+    data:   [u8; N],
 }
 impl<const N: usize> Default for TimingMessage<N> {
     fn default() -> Self {
         Self {
             rdtscp: Instant::default(),
-            data: [0; N],
+            data:   [0; N],
         }
     }
 }
 fn rdtscp() -> u64 {
     unsafe { __rdtscp(&mut 0u32 as *mut _) }
 }
-
 
 // const N: usize = 1;
 // #[inline(never)]
@@ -79,7 +78,7 @@ fn rdtscp() -> u64 {
 
 //     });
 // }
-fn consumer_latency<const N_BYTES: usize>(n_contenders: usize){
+fn consumer_latency<const N_BYTES: usize>(n_contenders: usize) {
     std::thread::scope(|s| {
         let ctrlcd = Arc::new(AtomicBool::new(false));
         let ctrlcd1 = ctrlcd.clone();
@@ -88,7 +87,7 @@ fn consumer_latency<const N_BYTES: usize>(n_contenders: usize){
         });
         let lock = Arc::new(SeqLock::default());
         let lock1 = lock.clone();
-        for i in 1..(n_contenders+1) {
+        for i in 1..(n_contenders + 1) {
             let lock2 = lock.clone();
             let ctrlcd2 = ctrlcd.clone();
             s.spawn(move || {
@@ -109,7 +108,7 @@ fn consumer_latency<const N_BYTES: usize>(n_contenders: usize){
             let mut last = Instant::now();
             while !ctrlcd3.load(Ordering::Relaxed) {
                 let t = Instant::now();
-                unsafe{_mm_lfence()};
+                unsafe { _mm_lfence() };
                 lck.read(&mut m);
                 let t2 = Instant::now();
                 if m.rdtscp != last {
@@ -143,59 +142,46 @@ fn consumer_latency<const N_BYTES: usize>(n_contenders: usize){
     })
 }
 
+#[repr(align(64))]
+struct Test
+{
+    flag: AtomicBool
+}
+
 const PING: bool = false;
 const PONG: bool = true;
-fn cas_baseline(){
-        let done = AtomicBool::new(false);
-        let flag = AtomicBool::new(PING);
-        let barrier = Barrier::new(2);
-        println!("starting");
-        std::thread::scope(|s| {
-            s.spawn(|| {
-                core_affinity::set_for_current(CoreId { id: 8});
+fn cas() {
+    let flag = Test {flag: AtomicBool::new(PING)};
+    let barrier = Barrier::new(2);
+    std::thread::scope(|s| {
+        s.spawn(|| {
+            core_affinity::set_for_current(CoreId { id: 7});
 
-                barrier.wait();
-                while !done.load(Ordering::Relaxed){
-                    while flag.compare_exchange(PING, PONG, Ordering::Relaxed, Ordering::Relaxed).is_err(){
-                        if done.load(Ordering::Relaxed){break}
-                    }
-                }
-                println!("pingpong done");
-            });
-            s.spawn(|| {
-                let mut timer = Timer::new("cas_round_trip");
-                core_affinity::set_for_current(CoreId { id: 6});
-                barrier.wait();
-                while !done.load(Ordering::Relaxed) {
-                    timer.start();
-                    let curt = std::time::Instant::now();
-                    for _ in 0..1000 {
-                        while flag.compare_exchange(PONG, PING, Ordering::Relaxed, Ordering::Relaxed).is_err() {
-                            if done.load(Ordering::Relaxed){
-                                break;
-                            }
-                        }
-                    }
-                    println!("{:?}", curt.elapsed());
-                    timer.stop();
-                }
-                println!("pongping done");
-            });
-            std::thread::sleep(Duration::from_secs(2));
-            done.store(true, Ordering::Relaxed);
+            barrier.wait();
+            loop {
+                while flag.flag
+                    .compare_exchange(PING, PONG, Ordering::Relaxed, Ordering::Relaxed)
+                    .is_err()
+                {}
+            }
         });
+        s.spawn(|| {
+            core_affinity::set_for_current(CoreId { id: 3 });
+            barrier.wait();
+            loop {
+                let curt = std::time::Instant::now();
+                for _ in 0..10000 {
+                    while flag.flag
+                        .compare_exchange(PONG, PING, Ordering::Relaxed, Ordering::Relaxed)
+                        .is_err()
+                    {}
+                }
+                println!("{:?}", curt.elapsed());
+            }
+        });
+    });
 }
 
 pub fn main() {
-    // consumer_latency::<1>(0);
-    cas_baseline();
-        std::thread::sleep(Duration::from_secs(2));
-    cas_baseline();
-        std::thread::sleep(Duration::from_secs(5));
-    cas_baseline();
-        std::thread::sleep(Duration::from_secs(6));
-    cas_baseline();
-        std::thread::sleep(Duration::from_secs(6));
-    cas_baseline();
+    cas();
 }
-
