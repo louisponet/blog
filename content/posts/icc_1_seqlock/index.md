@@ -23,7 +23,7 @@ While designing the inter core communication (icc) layer,  have taken a great de
 # SeqLock
 The embodiment of the above goals in terms of synchronization techniques is the `SeqLock` (see [Wikipedia](https://en.wikipedia.org/wiki/Seqlock), [seqlock in the linux kernel](https://docs.kernel.org/locking/seqlock.html), and [Erik Rigtorp's C++11 implementation](https://github.com/rigtorp/Seqlock)).
 
-The essence can be boiled down to
+The main considerations are:
 - A `Producer` (or writer) is never blocked by `Consumers` (readers)
 - The `Producer` atomically increments a counter (the `Seq` in `SeqLock`) once before and once after writing the data
 - `counter & 1 == 0` (even) communicates to `Consumers` that they can read data
@@ -74,19 +74,19 @@ impl<T: Copy> SeqLock<T> {
 That's it, till next time folks!
 
 # Are barriers necessary?
-Most literature on `SeqLocks` focuses (rightly so) on correctness and guaranteeing it as much as possible. The two main points are that
-- the `data` has no dependency on the `version` of the `SeqLock`, i.e. the compiler is allowed to merge or reorder the two increments on the `Producer` side and the checks on the `Consumer` side
-- depending on the model, the cpu can similarly reorder when changes to `version` become visible to the other cores, and when `data` is actually copied in and out of the lock
+Most literature on `SeqLocks` focuses (rightly so) on guaranteeing correctness. The two main points are that
+- the `data` has no dependency on the `version` of the `SeqLock` which allows the compilerto merge or reorder the two increments to `self.version` in the `write` function, and the checks on `v1` and `v2` on the `read` side
+- depending on the model, the cpu can similarly reorder when the changes to `version` become visible to the other cores, and when `data` is actually copied in and out of the lock
 
-On x86 the latter is less of a problem since they are "strongly memory ordered" and `version` is atomic. However, adding the barriers in this case leads to no-ops so they don't hurt either. See the [Release-Acquire ordering section in the c++ reference](https://en.cppreference.com/w/cpp/atomic/memory_order#Release-Acquire_ordering) for further information.
+For x86 cpus, the latter is less of a problem since they are "strongly memory ordered" and `version` is atomic. However, adding the barriers in this case leads to no-ops so they don't hurt either. See the [Release-Acquire ordering section in the c++ reference](https://en.cppreference.com/w/cpp/atomic/memory_order#Release-Acquire_ordering) for further information.
 
 ## Torn data testing
 
 Before demonstrating how one would go about verifiying if and why barriers are needed, let's design some tests to validate a `SeqLock` implementation.
 The main concern is data consistency, i.e. that a `Consumer` does not read data that is being written to.
-We test this by making a `Producer` fill and write an array with an increasing counter into the `SeqLock`, while a `Consumer` reads and verifies that all entries in the read array are identical (see the highlighted line below)
+We test this by making a `Producer` fill and write an array with an increasing counter into the `SeqLock`, while a `Consumer` reads and verifies that all entries in the array are identical (see the highlighted line below)
 
-```rust,linenos,hl_lines=17
+```rust,linenos,hl_lines=14 15 17 26 27
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -167,20 +167,20 @@ pub fn write(&self, val: &T) {
 ```
 I find that they fail for array sizes of 64 (512 bytes) and up. This signals that either the compiler or the cpu did some reordering of operations.
 
-The issue in this specific case is that the compiler has inline the `read` function and reordered `let first = msg[0]` on line (15) to be executed before
+The issue in this specific case is that the compiler has inlined the `read` function and reordered `let first = msg[0]` on line (15) to be executed before
 the `read` on line (14), causing obvious problems.
 Just to highlight how fickle inlining is, adding `assert_ne!(msg[0], 0)` after line (19) makes all tests pass.
 
 While changing one of the `self.version.load(Ordering::Relaxed)` operations in `read` to `self.version.load(Ordering::Acquire)` solves the issue in this case, adding `#[inline(never)]` is much more safe and does not lead to any difference in performance.
 We do the same for the `write` function to avoid similar shenanigans there.
 
-Even though the tests now pass even without using any barriers, we proceed with a double check by analyzing the assembly that was produced by the compiler.
+Even though the tests now pass without using any barriers, we proceed with a double check by analyzing the assembly that was produced by the compiler.
 
 ## Deeper dive using [`cargo asm`](https://crates.io/crates/cargo-show-asm/0.2.34)
-This is for sure one of the best tools for this kind of analysis. I highly recommend adding `#[inline(never)]` to isolate the function of interest from the rest of the code.
+`cargo asm` is for sure one of the best tools for this kind of analysis, with [godbolt](https://godbolt.org) being another. I highly recommend adding `#[inline(never)]` to isolate the function of interest from the rest of the code.
 
 ### `SeqLock::<[usize; 1024]>::read`
-
+When using a large array with 1024 elements, the `rust` code compiles down to
 ```asm, linenos, hl_lines=19 22 26 27 28 30
 code::SeqLock<T>::read:
         .cfi_startproc
@@ -225,7 +225,7 @@ code::SeqLock<T>::read:
         .cfi_def_cfa_offset 8
         ret
 ```
-First thing we can observe in lines (19, 22, 27) is that `rust` chose to not adhere to our ordering of fields in `SeqLock`, i.e. it moved `version` behind `data`.
+First thing we can observe in lines (19, 22, 27) is that `rust` chose to not adhere to our ordering of fields in `SeqLock`, moving `version` behind `data`.
 If needed, the order of fields can be preserved by adding `#[repr(C)]`.
 
 The lines that constitute the main operations of the `SeqLock` are highlighted, corresponding almost one-to-one with the `read` function:
@@ -238,6 +238,7 @@ The lines that constitute the main operations of the `SeqLock` are highlighted, 
 7. Profit...
 
 ### `SeqLock::<[usize; 1]>::read`
+For smaller array sizes we get
 ```asm, linenos
 code::SeqLock<T>::read:
         .cfi_startproc
@@ -260,10 +261,10 @@ Well at least it looks clean... I'm pretty sure I don't have to underline the is
 4. copy from `rax` into the input
 5. No Stonks...
 
-This showcases again that while tests are useful it is good practice to double check that the compiler produced the correct assembly.
-In fact, I never got the tests to fail after adding the `#[inline(never)]` we discussed earlier, even though the assembly clearly shows that nothing stops a read while the write is happening.
-The reason behind this is that the `memcpy` is done **inline/in cache** for small enough data using moves between cache and registers (`rax` in this case).
-If a single instruction is used (`mov` here) it is never possible that the data is partially overwritten while reading, and it is still highly unlikely when multiple instructions are required.
+This is a good demonstration of why tests should not be blindly trusted and why double checking the produced assembly is good practice.
+In fact, I never got the tests to fail after adding the `#[inline(never)]` we discussed earlier, even though the assembly clearly shows that nothing stops a `read` while a `write` is happening.
+This happens because the `memcpy` is done **inline/in cache** for small enough data, using moves between cache and registers (`rax` in this case).
+If a single instruction is used (`mov` here) it is never possible that the data is partially overwritten while reading, and it remains highly unlikely even when multiple instructions are required.
 
 ### Adding Memory Barriers
 Here we go:
@@ -299,9 +300,9 @@ code::SeqLock<T>::read:
         jne .LBB6_1
         ret
 ```
-It is interesting to see that the compiler chooses to reuse `rcx` both for the data copy in lines (5) and (6), as well as the second version load in line (8).
+It is interesting to see that the compiler chooses to reuse `rcx` both for the data copy in lines (5) and (6), as well as the second `version` load in line (8).
 
-With the current `rust` compiler (1.78.0), I found that only adding `Ordering::Acquire` in lines (4) or (7) already does the trick.
+With the current `rust` compiler (1.78.0), I found that only adding `Ordering::Acquire` in lines (4) or (7) of the `rust` code already does the trick.
 However, they only guarantee the ordering of loads of the `version` atomic when combined with an `Ordering::Release` store in the `write` function, not when the actual data is copied.
 That is where the `compiler_fence` comes in guaranteeing also this ordering. I have not noticed a change in performance when adding these additional barriers.
 
@@ -317,19 +318,22 @@ pub fn write(&self, val: &T) {
     self.version.store(v.wrapping_add(1), Ordering::Release);
 }
 ```
-Our `SeqLock` implementation should now be correct and is in fact pretty much identical to others around. Next up is something that's covered much less frequently: timing and potentially optimizing the implementation.
-There is not much room to play with here, but it serves as a good first demonstration of some basic concepts that surround timing low latency constructs, and give a glimpse into the inner workings of the cpu.
-BTW, if memory models and barriers are really your schtick, live a little and marvel your way through [The Linux Kernel Docs on Memory Barriers](https://docs.kernel.org/core-api/wrappers/memory-barriers.html).
+Our `SeqLock` implementation should now be correct and is in fact pretty much identical to others around.
+
+We now turn to an aspect that's covered much less frequently: timing and potentially optimizing the implementation.
+There is not much room to play with here, but while going through potential optimizations we will touch on some key concepts that surround the business of timing low latency constructs. As a bonus we will get a first glimpse into the inner workings of the cpu.
+
+P.S.: if memory models and barriers are really your schtick, live a little and marvel your way through [The Linux Kernel Docs on Memory Barriers](https://docs.kernel.org/core-api/wrappers/memory-barriers.html).
 
 # Performance
-Does the `fetch_add` make the `write` function of the [final implementation](@/posts/icc_1_seqlock/index.md#tl-dr) indeed faster?
+THe main question we will answer is: Does the `fetch_add` make the `write` function of the [final implementation](@/posts/icc_1_seqlock/index.md#tl-dr) indeed faster?
 
 ## Timing 101
 The full details regarding the suite of timing and performance measurements tools I have developed to track the performance of [**Mantra**](@/posts/hello_world/index.md) will be divulged in a later post.
 
 For now, the key points are:
 
-**Use `rdtscp` to take timestamps**: the `rdtscp` hardware counter is a monotonously increasing cpu cycle counter (at base frequency) which is reset upon startup. What's even better is that on recent cpus it is shared between all cores (look for `constant_tsc` in `/proc/cpuinfo`). It is the cheapest, at ~5ns overhead, and most precise way to take timestamps. An added benefit is that it partially orders operations (see discussion above), in that it will not execute until _"all previous instructions have executed and all previous loads are globally visible"_ see [this](https://www.felixcloutier.com/x86/rdtscp). Using an `_mm_lfence` after the initial `rdtscp` will also force executions to not begin before the timestamp is taken. This is **the only reasonable way** to time on really low latency scales.
+**Use `rdtscp` to take timestamps**: the `rdtscp` hardware counter is a monotonously increasing cpu cycle counter (at base frequency) which is reset upon startup. What's even better is that on recent cpus it is shared between all cores (look for `constant_tsc` in `/proc/cpuinfo`). It is the cheapest, at ~5ns overhead, and most precise way to take timestamps. An added benefit is that it partially orders operations (see discussion above), in that it will not execute until _"all previous instructions have executed and all previous loads are globally visible"_, see [this](https://www.felixcloutier.com/x86/rdtscp). Using an `_mm_lfence` after the initial `rdtscp` will also force executions to not begin before the timestamp is taken. This is **the only reasonable way** to time on really low latency scales.
 
 **use [`core_affinity`](https://docs.rs/core_affinity/latest/core_affinity/) and `isolcpus`**: The combination of the [`isolcpus`](https://wiki.linuxfoundation.org/realtime/documentation/howto/tools/cpu-partitioning/isolcpus) kernel parameter with binding a thread in `rust` to a specific core allows us to minimize jitter coming from whatever else is running on the computer. I have isolated the p-cores on my cpu for our testing purposes. See [Erik Rigtorp's low latency tuning guide](https://rigtorp.se/low-latency-guide/) for even more info.
 
