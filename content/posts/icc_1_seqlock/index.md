@@ -335,7 +335,7 @@ For now, the key points are:
 
 **Use `rdtscp` to take timestamps**: the `rdtscp` hardware counter is a monotonously increasing cpu cycle counter (at base frequency) which is reset upon startup. What's even better is that on recent cpus it is shared between all cores (look for `constant_tsc` in `/proc/cpuinfo`). It is the cheapest, at ~5ns overhead, and most precise way to take timestamps. An added benefit is that it partially orders operations (see discussion above), in that it will not execute until _"all previous instructions have executed and all previous loads are globally visible"_, see [this](https://www.felixcloutier.com/x86/rdtscp). Using an `_mm_lfence` after the initial `rdtscp` will also force executions to not begin before the timestamp is taken. This is **the only reasonable way** to time on really low latency scales.
 
-**use [`core_affinity`](https://docs.rs/core_affinity/latest/core_affinity/) and `isolcpus`**: The combination of the [`isolcpus`](https://wiki.linuxfoundation.org/realtime/documentation/howto/tools/cpu-partitioning/isolcpus) kernel parameter with binding a thread in `rust` to a specific core allows us to minimize jitter coming from whatever else is running on the computer. I have isolated the p-cores on my cpu for our testing purposes. See [Erik Rigtorp's low latency tuning guide](https://rigtorp.se/low-latency-guide/) for even more info.
+**use [`core_affinity`](https://docs.rs/core_affinity/latest/core_affinity/) and `isolcpus`**: The combination of the [`isolcpus`](https://wiki.linuxfoundation.org/realtime/documentation/howto/tools/cpu-partitioning/isolcpus) kernel parameter with binding a thread in `rust` to a specific core allows us to minimize jitter coming from whatever else is running on the computer. The p-cores on my cpu have been isolated for our testing purposes below. See [Erik Rigtorp's low latency tuning guide](https://rigtorp.se/low-latency-guide/) for even more info.
 
 **Offload the actual timing**: To minimize the timing overhead we take the two `rdtscp` stamps and offload them to a `Queue` in shared memory (more on what a `Queue` is later). Another process can then read these messages, collect statistics and convert `rdtscp` stamp deltas to nanoseconds (in the i9 14900k case x3.2). For this last step we can actually reuse the [`nanos_from_raw_delta`](https://docs.rs/quanta/latest/quanta/struct.Clock.html#method.delta_as_nanos) function in the `quanta` library.
 
@@ -361,14 +361,14 @@ timer.latency(prev_rdtscp);
 ```
 The former will be called `Business` timing (for business logic), and the latter, you guessed it, `Latency` timing.
 
-I've created a tui tool called `timekeeper` that ingests these timing results and can be ran separate from the timed code. It then displays a continuously updating graph of timings and some statistics:
+Throughout the following discussion we'll use a small tui tool I've created called `timekeeper` that ingests and displays these timing results:
 
 ![](timekeeper_example.png#noborder "timekeeper_example")
 *Fig 1. Timekeeper example*
 
 ## Baseline Inter Core Latency
 
-After isolating cpus, turning off hyperthreading, doing some more of the low latency tuning steps and switching to the `performance` governor, I use the following basic ping/pong code to provide us with a baseline:
+After isolating cpus, turning off hyperthreading, doing some more of the low latency tuning steps and switching to the `performance` governor, I've ran the following basic ping/pong code to provide us with some baseline latency timings:
 ```rust
 #[repr(align(64))]
 struct Test(AtomicI32);
@@ -402,17 +402,17 @@ fn one_way_2_lines(n_samples:usize) {
 }
 ```
 
-The `2_lines` stands for the fact that we are communicating through atomics `seq1` and `seq2` with each their own cacheline: i.e. `#[repr(align(64))]`.
+The `"2_lines"` stands for the fact that we are communicating through atomics `seq1` and `seq2` with each their own cacheline: i.e. `#[repr(align(64))]`.
 Running the code multiple times leads to:
 
 ![](one_way_2_lines.png#noborder "baseline_inter_core")
 *Fig 2. Base line core-core latency*
 
-Bear in mind that these are round trip times making the real latency half of what is measured.
+Bear in mind that the real latency is half of what is measured since these are round trip times.
 
 The steps with different but constant average timings showcases the main difficulty with timing low level/low latency constructs:
 the cpu is essentially a black box and does a lot of memory and cache related wizardry behind the scenes to implement the [MESI protocol](https://en.wikipedia.org/wiki/MESI_protocol).
-Combined with branch prediction this makes the final result quite dependent on the exact execution starting times of the threads, leading to different but stable averages each run.
+Combining this with branch prediction renders the final result quite dependent on the exact execution starting times of the threads, leading to different but stable averages each run.
  
 Anyway, the lower end of these measurements serves as a sanity check and target for our `Seqlock` latency.
 
@@ -422,7 +422,7 @@ In all usecases of `Seqlocks` in [**Mantra**](@/posts/hello_world/index.md) ther
 We reflect this in the timing code's setup:
 - a `Producer` writes an `rdtscp` timestamp into the `Seqlock` every 2 microseconds
 - a `Consumer` busy spins reading this timestamp, and if it changes publishes a timing and latency measurement using it as the starting point
-- 0 or more "contender" `Consumers` do the same to see how increasing consumer count impacts the main `Producer` and `Consumer`
+- 0 or more "contender" `Consumers` do the same to see how increasing `Consumer` contention impacts the main `Producer` and `Consumer`
 
 ```rust
 #[derive(Clone, Copy)]
@@ -491,7 +491,7 @@ fn consumer_latency(n_contenders: usize) {
 ```
 
 ### Starting Point
-We use the `SeqLock` code we implemented above, leading to the following latency timings for a single consumer (left) and 5 consumers (right):
+We use the `SeqLock` code we implemented above as the initial point, leading to the following latency timings for a single consumer (left) and 5 consumers (right):
 
 ![](consumer_latency_initial.png#noborder "initial_consumer_latency")
 *Fig 3. Initial Consumer Latency*
@@ -499,7 +499,8 @@ We use the `SeqLock` code we implemented above, leading to the following latency
 Would you look at that: timings are very stable without much jitter (tuning works!), the latency increase with increasing `Consumer` count is extremely minimal while the `Producer` gets... even faster(?), somehow.
 I triple checked and it is consistently reproducible.
 
-However, we are quite far off the ~30-40ns latency target. Looking closer at the write function, we can realize that `fetch_add` is a single instruction version of lines (1) and (2):
+### Optimization
+We are, however, still quite far off the ~30-40ns latency target. Looking closer at the `write` function, we realize that `fetch_add` is a single instruction version of lines (1) and (2):
 ```rust, linenos, hl_lines= 1 2
     let v = self.version.load(Ordering::Relaxed).wrapping_add(1);
     self.version.store(v, Ordering::Release);
@@ -508,7 +509,7 @@ However, we are quite far off the ~30-40ns latency target. Looking closer at the
     compiler_fence(Ordering::AcqRel);
     self.version.store(v.wrapping_add(1), Ordering::Release);
 ```
-which leads to:
+which we thus change to:
 ```rust
     let v = self.version.fetch_add(1, Ordering::Release);
     compiler_fence(Ordering::AcqRel);
@@ -516,14 +517,15 @@ which leads to:
     compiler_fence(Ordering::AcqRel);
     self.version.store(v.wrapping_add(2), Ordering::Release);
 ```
-leads to a serious improvement especially for the 1 `Consumer` case:
+
+Measuring again, we find that this leads to a serious improvement, almost halving the latency in the 1 `Consumer` case (left), while also slightly improving the 5 `Consumer` case (right):
 
 ![](consumer_latency_improved.png#noborder "improved_consumer_latency")
 *Fig 4. Optimized Consumer Latency*
 
-As far as I can tell, there is nothing that can be optimized on the `read` side of things.
+Unfortunately, there is nothing that can be optimized on the `read` side of things.
 
-One final optimization is to add `#[repr(align(64))]` the `SeqLocks`: 
+One final optimization we'll proactively do is to add `#[repr(align(64))]` the `SeqLocks`:
 ```rust
 #[repr(align(64))]
 pub struct SeqLock<T> {
@@ -539,9 +541,9 @@ Looking back at our original design goals:
 - `Producers` are never blocked
 - `Consumers` don't impact the `Producers` and themselves + adding more `Consumers` doesn't dramatically decrease performance
 
-Our implementation seems to be as good as it can be!
+our implementation seems to be as good as it can be!
 
-This concludes our deep dive into `SeqLocks` as this first technical blog post.
+We thus conclude our deep dive into `SeqLocks` here, also concluding this first technical blog post.
 We've laid the groundwork and have introduced some important concepts for the upcoming post on `Queues` and `SeqLockVectors` as Pt 2 on inter core communication.
 
 See you then!
