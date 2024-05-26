@@ -43,40 +43,30 @@ Let's start with a quick billboard rundown of the current features.
 
 # System Design Overview
 The core design has changed very little since **Mantra's** inception.
-One of the underlying principles that has guided me while designing has always been a focus on pragmatism.
+One of the main principles that has always guided me is a strong focus on pragmatism.
+After all, creating a fully fledged and capable low-latency trading engine, while learning a new programming language, is no small project to tackle in one's free time.
+A very modular and disconnected system design with isolated parts would allow me to effeciently add features while also allowing me to refactor previous implementations as
+I gathered more experience working with `rust`.
 
-I have limited resources in terms of time and capital.
-Couple to this the fact that I was still learning `rust` when I started working on **Mantra**, and an extremely modular and easily maintainable system quickly becomes the only option.
-
-This led me to choose for a distributed system based on message passing through `Queues` between different `Actors`, rather than the potentially lower latency *single-function-hot-path* approach.
-It is also much easier to build the latter on top of the former than the other way around.
-
-This modular, disconnected, design has allowed me to gradually add more functionality on top of a solid foundation without needing to change all parts of the system at once.
-The same applies to the inevitable refactoring and improving of different parts as I learned more about `rust`.
+This made me to opt for an event based system where `Actors` communicate with eachother by passing messages through `Queues`.
+The potentially lower latency *single-function-hot-path* approach inevitably leads to more intertwined code, and I am convinced that it is easier to be build on top of a solid distributed system rather than the other way around.
 
 The schematic below shows a high-level overview of the current design of **Mantra**
 ![](system_design.svg#noborder)
 *Fig 1. High level design of **Mantra***
 
-The data flow is quite straight-forward:
-- incoming `L2Update` and `TradeUpdate` market data messages get consumed by the `TradeModels`
-- each `TradeModel` fills out a pre-defined set of ideal order positions, each with an `InstrumentId`, `price` and `volume`
+The main execution logic and data flow is quite straight-forward:
+1. incoming `L2Update` and `TradeUpdate` market data messages get consumed by the `TradeModels`
+2. each `TradeModel` fills out a pre-defined set of ideal order positions, each with an `InstrumentId`, `price` and `volume`
+3. the `Overseer` actor continuously loops through these, and compares them to previously sent `OrderRequests` and live `Orders` on the target `Exchange`
+4. if they don't match up and the necessary `balance` is available on the `Exchange`, the `Overseer` generates and publishes a new `OrderRequest`
+5. the `AccountHandler` connecting with the target `Exchange` will then consume and send these requests, while feeding back various updates to the `Overseer`
 
-The `Overseer` actor system continuously loops through these and compares them to previously sent `OrderRequests` and live `Orders` on the target `Exchange`.
-If they don't match up and the necessary `balance` is available on the `Exchange`, the `Overseer` generates and publishes a new `OrderRequest`.
-The `AccountHandler` connecting with the target `Exchange` will then consume and send them, while feeding back various updates to the `Overseer`.
+An added benefit of centering the system around multi-consumer broadcasting message `Queues` is that it becomes extremely easy to attach a number of non latency critical auxiliary `Actors` that handle tasks such as **logging** without impacting the performance of the main business logic.
 
-You might ask yourself why I chose for a distributed design, considering that I'm targeting low latency where a single hot path is the name of the game.
-The answer is to some degree my interest in distributed systems, but mainly pragmatism.
+Lastly, as **crypto markets** are for now the main target (**Mantra** is by no means built specifically for crypto), the vast majority of latency anyway originates from the connection between me and the exchanges. I hope to be able to co-locate with certain exchanges in the future, at which point a single-function-hot-path becomes much more attractive for certain applications. Again, I believe a solid distributed system can form the perfect starting point for this as well.
 
-As with many other deWith the resources at my disposal, it makes sense to separate out concerns into different subsystems which allows each of them to handle their well-defined tasks more efficiently.
-One _Overseer_, _MarketDataHandler_ and _AccountHandler_ can serve the order flow for many _TradeModels_, each handling potentially many _Instruments_, etc.
-
-Moreover, the multi-consumer broadcasting message queues that form the spine of the system naturally allow attaching non latency critical auxiliary _Actors_ that handle tasks such as **logging** without impacting the performance of the main execution path.
-
-Lastly, as **crypto markets** are for now the main target (**Mantra** is by no means specifically built for crypto), the vast majority of latency anyway originates from the connection between me and the exchanges.
-
-Nonetheless, I really strived to keep the internal latency given the design constraints to the absolute minimum, and **Mantra** achieves internal latencies between 400ns and 10$\mu$s on an untuned arch-linux based distro running on a less than prime example of the intel 14900 K.
+That is why I really strived to keep the internal latency as low as possible at every step of the way. The result is that **Mantra** achieves internal tick-to-trade latencies between 400ns and 10$\mu$s on an untuned arch-linux based distro running on a less than prime example of the intel 14900 K.
 
 ## Inter Core Communication (ICC)
 
