@@ -8,53 +8,68 @@ tags =  ["mantra", "hft", "icc"]
 comment = true
 +++
 
-I've started working on **Mantra** mid-June 2023, in an effort to learn **rust** and explore the development process of a distributed, high(ish)-frequency/low-latency trading system in the language.
-One of my targets was on the order of 0.5 - 10$\mu$s [tick-to-trade](https://beeksgroup.com/blog/tick-to-trade-is-it-the-new-must-have-metric-in-trading-performance/) internal latency (depending on trading algo complexity).
-I am happy with the solutions and design I came up with, and think there is enough genuinly useful material to serve as inspiration for those seeking to embark on a similar endeavor. While I will communicate code snippets through `rust`, the concepts are what's important and everything should be straight-forwardly translatable into any other programming language.
+I started work on **Mantra** in an effort to learn **rust** and explore the development process of a distributed, high(ish)-frequency/low-latency trading system in the language.
+One of the driving goals was to achieve a [tick-to-trade](https://beeksgroup.com/blog/tick-to-trade-is-it-the-new-must-have-metric-in-trading-performance/) internal latency on the order of 0.5 - 10$\mu$s (depending on trading algo complexity).
 
-The code will reamin closed-source for obvious reasons, but I will go through and give a deeper discussion on some of its core building blocks in this blog.
-Most of these are hand-crafted and purpose-built with a strong focus on pragmatism given the scope of the project.
+I've now reached a point where I feel like some of the solutions and designs I came up with are worth sharing. 
+While most code snippets will be written in `rust`, the language is not the main focus, which should make translating the discussed concepts easily applicable using other languages.
+I hope to also learn a thing or two through eventual discours with more seasoned practitioners, so be sure to make plentiful use of the *Comment* field!
 
-My intentions are of course not purely altruistic, and in the ideal case I also hope to be able to learn a thing or two through the comments of more seasoned visitors. Time will tell.
+**Mantra** itself will remain closed-source, for obvious reasons, but I will use this blog to go through and give detailed discussions on some of its core building blocks.
+Most of these have been purposefully hand-crafted focusing on pragmatism given the scope of the project.
 
-Let's first level the playing field with an overview of the current state of affairs and overall design of the system. 
+The intention of this initial blog post is to give an overview of the features and general design of **Mantra**, setting the stage for future more technical posts.
 
+Let's start with a quick billboard rundown of the current features.
 # Features and Capabilities
 ![](ui.png#noborder "ui")
 ***Mantra** ui during a backtest*
 
 - Multicore
 - **NO ASYNC**
-- Low latency int(er/ra) process communication using hand crafted message **queues, seqlocks, and shared memory**
+- Low latency inter core communication using hand crafted message **queues, seqlocks, and shared memory**
 - Full internal observability (message tracking) and high performance **in-situ telemetry** of latency and business logic
-- Full **persistence of messages** in a highly efficient encoding for post execution analysis and replay
+- Full **persistence of messages** using an efficiently compressed encoding for post execution analysis and replay
 - [L2](https://centerpointsecurities.com/level-1-vs-level-2-market-data/) based orderbooks
-- Concurrent handling of multiple algorithms
+- Concurrent handling of multiple trading algorithms
 - Balance and order tracking accross multiple _Exchanges_
 - Continuous **ingestion and storage** of market data streams
-- WebSocket connections to 5 crypto _Exchanges_ (Binance, Bitstamp, Bitfinex, Coinbase and Kraken)
-- "In production" **backtesting** by replaying the historical streams, and mimic execution with a **mock exchange**
-- High-performance realtime UI for analysis of the system and marketdata, handling millions of datapoints
+- WebSocket based connections to 5 crypto _Exchanges_ (Binance, Bitstamp, Bitfinex, Coinbase and Kraken)
+- "In production" **backtesting** by replaying historical marketdata streams while mimicking execution with a **mock exchange**
+- Real-time UI for analysis of the system, marketdata and backtesting, capable of handling millions of datapoints
 - ~500k msgs/s throughput @ 0.5 - 10 microseconds internal latency
 - A focus on code simplicity and **locality of behavior**
 - < 15K LOC (for now)
 
 # System Design Overview
-The core design has changed very little since **Mantra's** inception. It is based around message passing between a couple core systems or _Actors_.
+The core design has changed very little since **Mantra's** inception.
+One of the underlying principles that has guided me while designing has always been a focus on pragmatism.
 
+I have limited resources in terms of time and capital.
+Couple to this the fact that I was still learning `rust` when I started working on **Mantra**, and an extremely modular and easily maintainable system quickly becomes the only option.
+
+This led me to choose for a distributed system based on message passing through `Queues` between different `Actors`, rather than the potentially lower latency *single-function-hot-path* approach.
+It is also much easier to build the latter on top of the former than the other way around.
+
+This modular, disconnected, design has allowed me to gradually add more functionality on top of a solid foundation without needing to change all parts of the system at once.
+The same applies to the inevitable refactoring and improving of different parts as I learned more about `rust`.
+
+The schematic below shows a high-level overview of the current design of **Mantra**
 ![](system_design.svg#noborder)
 *Fig 1. High level design of **Mantra***
 
-As shown in the picture, the data flow is quite straight-forward. Incoming _L2Update_ and _TradeUpdate_ market data messages get consumed by the _TradeModels_, which each fill out a pre-defined set of ideal order positions, each with a _InstrumentId_, _price_ and _volume_.
+The data flow is quite straight-forward:
+- incoming `L2Update` and `TradeUpdate` market data messages get consumed by the `TradeModels`
+- each `TradeModel` fills out a pre-defined set of ideal order positions, each with an `InstrumentId`, `price` and `volume`
 
-The _Overseer_ continuously loops through these and compares them to previously sent _OrderRequests_ and _Orders_ that are currently live on the _Exchanges_.
-If they don't match up and the necessary _balance_ is available on the target _Exchange_, the _Overseer_ sends an _OrderRequest_ which the correct _AccountHandler_ will then convert into the actual request sent to the exchange.
-Various updates from the different _Exchanges_ are then fed back to the _Overseer_.
+The `Overseer` actor system continuously loops through these and compares them to previously sent `OrderRequests` and live `Orders` on the target `Exchange`.
+If they don't match up and the necessary `balance` is available on the `Exchange`, the `Overseer` generates and publishes a new `OrderRequest`.
+The `AccountHandler` connecting with the target `Exchange` will then consume and send them, while feeding back various updates to the `Overseer`.
 
 You might ask yourself why I chose for a distributed design, considering that I'm targeting low latency where a single hot path is the name of the game.
 The answer is to some degree my interest in distributed systems, but mainly pragmatism.
 
-With the resources at my disposal, it makes sense to separate out concerns into different subsystems which allows each of them to handle their well-defined tasks more efficiently.
+As with many other deWith the resources at my disposal, it makes sense to separate out concerns into different subsystems which allows each of them to handle their well-defined tasks more efficiently.
 One _Overseer_, _MarketDataHandler_ and _AccountHandler_ can serve the order flow for many _TradeModels_, each handling potentially many _Instruments_, etc.
 
 Moreover, the multi-consumer broadcasting message queues that form the spine of the system naturally allow attaching non latency critical auxiliary _Actors_ that handle tasks such as **logging** without impacting the performance of the main execution path.
