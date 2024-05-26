@@ -17,7 +17,9 @@ fn unlikely(b: bool) -> bool {
     if b { cold() }
     b
 }
+
 #[derive(Default)]
+#[repr(align(64))]
 pub struct SeqLock<T> {
     version: AtomicUsize,
     data: UnsafeCell<T>,
@@ -43,20 +45,6 @@ impl<T: Copy> SeqLock<T> {
         }
     }
 
-    // #[inline(always)]
-    // pub fn write(&self, val: &T) {
-    //     let v = self.version.fetch_add(1, Ordering::Relaxed).wrapping_add(2);
-    //     unsafe { *self.data.get() = *val };
-    //     self.version.store(v, Ordering::Relaxed);
-    // }
-    // #[inline(never)]
-    // pub fn write(&self, val: &T) {
-    //     let v = self.version.fetch_add(1, Ordering::Release);
-    //     compiler_fence(Ordering::AcqRel);
-    //     unsafe { *self.data.get() = *val };
-    //     compiler_fence(Ordering::AcqRel);
-    //     self.version.store(v.wrapping_add(2), Ordering::Release);
-    // }
     #[inline(never)]
     pub fn write(&self, val: &T) {
         let v = self.version.fetch_add(1, Ordering::Release);

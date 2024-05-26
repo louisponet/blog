@@ -10,6 +10,7 @@ ma_timing = {path = "/home/ponet/Software/rustdev/ma_timing/crates/ma_timing"}
 ma_time = {path = "/home/ponet/Software/rustdev/ma_timing/crates/ma_time"}
 ma_queues= {path = "/home/ponet/Software/rustdev/ma_ipc/crates/ma_queues"}
 ctrlc = "3.4.4"
+iced-x86 = { version = "1.21.0" }
 [dev-dependencies]
 criterion = "*"
 quanta = "*"
