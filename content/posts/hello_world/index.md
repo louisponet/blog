@@ -1,9 +1,11 @@
 +++
 title = "Hello World, this is Mantra"
-date = 2024-05-05
+date = 2024-05-24
 description = "The current status and design overview of my hft trading engine, and an outline of the planned discussion topics related to it."
 [taxonomies]
 tags =  ["mantra", "hft", "icc"]
+[extra]
+comment = true
 +++
 
 I've started working on **Mantra** mid-June 2023, in an effort to learn **rust** and explore the development process of a distributed, high(ish)-frequency/low-latency trading system in the language.
