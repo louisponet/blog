@@ -32,9 +32,9 @@ Let's start with a quick billboard rundown of the current features.
 - Full **persistence of messages** using an efficiently compressed encoding for post execution analysis and replay
 - [L2](https://centerpointsecurities.com/level-1-vs-level-2-market-data/) based orderbooks
 - Concurrent handling of multiple trading algorithms
-- Balance and order tracking accross multiple _Exchanges_
+- Balance and order tracking accross multiple `Exchanges`
 - Continuous **ingestion and storage** of market data streams
-- WebSocket based connections to 5 crypto _Exchanges_ (Binance, Bitstamp, Bitfinex, Coinbase and Kraken)
+- WebSocket based connections to 5 crypto `Exchanges` (Binance, Bitstamp, Bitfinex, Coinbase and Kraken)
 - "In production" **backtesting** by replaying historical marketdata streams while mimicking execution with a **mock exchange**
 - Real-time UI for analysis of the system, marketdata and backtesting, capable of handling millions of datapoints
 - ~500k msgs/s throughput @ 0.5 - 10 microseconds internal latency
@@ -75,28 +75,28 @@ That is why I really strived to keep the internal latency as low as possible at 
 
 Let's zoom in to one of the fundamental parts of the system: the inter core communication layer.
 
-The first part consists of the message _Queues_, denoted in [Fig 1.](@/posts/hello_world/index.md#system-design-overview) by the red arrows and ovals that specify the message type of each queue.
-They are essentially [_Seqlocked_](https://en.wikipedia.org/wiki/Seqlock) ringbuffers that can be used both in *single-producer-multi-consumer* (SPMC) and *multi-producer-multi-consumer* (MPMC) modes.
+The first part consists of the message `Queues`, denoted in [Fig 1.](@/posts/hello_world/index.md#system-design-overview) by the red arrows and ovals that specify the message type of each queue.
+They are essentially [`Seqlocked`](https://en.wikipedia.org/wiki/Seqlock) ringbuffers that can be used both in *single-producer-multi-consumer* (SPMC) and *multi-producer-multi-consumer* (MPMC) modes.
 
 The main design considerations for their application in **Mantra** were:
 - Achieve a close to the ideal ~30ns core-to-core latency (see e.g. [anandtech 13900k and 13600k review](https://www.anandtech.com/show/17601/intel-core-i9-13900k-and-i5-13600k-review/5) and the [fantastic core-to-core-latency tool](https://github.com/nviennot/core-to-core-latency))
-- Every attached _Consumer_ gets every message, also known as *broadcast* mode
-- _Producers_ are "not" impacted by number of attached _Consumers_ (difficult to achieve perfectly), mainly they don't care if _Consumers_ can keep up
-- _Consumers_ should not impact eachother, and should know when they got sped past by _Producers_
+- Every attached `Consumer` gets every message, also known as *broadcast* mode
+- `Producers` are "not" impacted by number of attached `Consumers` (difficult to achieve perfectly), mainly they don't care if `Consumers` can keep up
+- `Consumers` should not impact eachother, and should know when they got sped past by `Producers`
 
-Considering these design goals, _Producers_ and _Consumers_ do not share any state but the ringbuffer itself. _Consumers_ simply know which version of the _Seqlocks_ guarding the data they expect.
-This means they know when the next message is ready: a _Producer_ has incremented the version of the next _Seqlock_ to the expected one,
-as well as when they got sped past: a _Producer_ incremented the version of the next _Seqlock_ at least twice making it too high.
+Considering these design goals, `Producers` and `Consumers` do not share any state but the ringbuffer itself. `Consumers` simply know which version of the `Seqlocks` guarding the data they expect.
+This means they know when the next message is ready: a `Producer` has incremented the version of the next `Seqlock` to the expected one,
+as well as when they got sped past: a `Producer` incremented the version of the next `Seqlock` at least twice making it too high.
 
-In **Mantra**, aside from the _Consumers_ that handle the business logic, each _Queue_ also has a _Consumer_ that persists each message to disk.
+In **Mantra**, aside from the `Consumers` that handle the business logic, each `Queue` also has a `Consumer` that persists each message to disk.
 
-The second part of the ICC layer are the _SeqlockVectors_ denoted by the blue rectangles in [Fig 1.](@/posts/hello_world/index.md#system-design-overview). They are used between the _TradeModels_ and the _Overseer_.
-These were chosen over another _Queue_ because _TradeModels_ potentially recalculate their ideal positions on each incoming marketdata message.
-The _Overseer_ takes care of quite some tasks. If it was busy while a _TradeModel_ recomputed the values for a given ideal _Order_ multiple times, the _Overseer_ would still have to go through the messages from oldest to newest.
-Using a _SeqlockVector_ means that the _TradeModels_ can update their desired positions as often as they want and the _Overseer_ will always potentially send _OrderRequests_ based on the latest information.
+The second part of the ICC layer are the `SeqlockVectors` denoted by the blue rectangles in [Fig 1.](@/posts/hello_world/index.md#system-design-overview). They are used between the `TradeModels` and the `Overseer`.
+These were chosen over another `Queue` because `TradeModels` potentially recalculate their ideal positions on each incoming marketdata message.
+The `Overseer` takes care of quite some tasks. If it was busy while a `TradeModel` recomputed the values for a given ideal `Order` multiple times, the `Overseer` would still have to go through the messages from oldest to newest.
+Using a `SeqlockVector` means that the `TradeModels` can update their desired positions as often as they want and the `Overseer` will always potentially send `OrderRequests` based on the latest information.
 
-One big benefit of using the style of communication is that by using shared memory any process can safely observe the messages flying through _Queues_ and access the data filled
-in the _SeqlockVectors_. As we will see later on this is very useful for offloading ancillary tasks to external tools.
+One big benefit of using the style of communication is that by using shared memory any process can safely observe the messages flying through `Queues` and access the data filled
+in the `SeqlockVectors`. As we will see later on this is very useful for offloading ancillary tasks to external tools.
 
 In the next blog post I will do a much deeper dive on this layer, so stay tuned for that!
 
@@ -105,33 +105,33 @@ In the next blog post I will do a much deeper dive on this layer, so stay tuned 
 From the very beginning I put great emphasis on in-situ telemetry to keep the performance of different parts of **Mantra** in check at all times.
 
 Given the design of **Mantra** I decided:
-- To use the hardware timer [_rdtscp_](https://www.felixcloutier.com/x86/rdtscp) for timestamping: more accurate, less costly than OS timestamps
+- To use the hardware timer [`rdtscp`](https://www.felixcloutier.com/x86/rdtscp) for timestamping: more accurate, less costly than OS timestamps
 - That each entering message gets an **origin** timestamp that is **propagated** to all downstream messages that originate from it
-- That when a message gets **published**, a timestamp is taken and its _delta_ w.r.t. the **origin** timestamp is stored together with the publisher's _id_ 
-- To offload these timestamps to specific timing _Queues_ in **shared memory** so external tools can do the timing analysis
+- That when a message gets **published**, a timestamp is taken and its `delta` w.r.t. the **origin** timestamp is stored together with the publisher's `id`
+- To offload these timestamps to specific timing `Queues` in **shared memory** so external tools can do the timing analysis
 
 This scheme allows me to automatically time the different parts of **Mantra** with minimal overhead and to a high degree of accuracy.
 It also allows to track the origin and "ancestry" of all messages in the system which is invaluable while debugging or optimizing.
 
-Together with the small _timekeeper_ tui tool and the fully fledged _ui_ shown below, this methodical focus on observability has allowed me to make informed implementation decisions every step of the way.
+Together with the small `timekeeper` tui tool and the fully fledged `ui` shown below, this methodical focus on observability has allowed me to make informed implementation decisions every step of the way.
 
 ![](timers.png#noborder)
-*Fig 3. timekeeper tui and per _OrderRequest_ message internal latency*
+*Fig 3. timekeeper tui and per `OrderRequest` message internal latency*
 
 ## Market Data
 The final and arguably most important piece of the puzzle is market data.
 I chose to focus on [L2](https://centerpointsecurities.com/level-1-vs-level-2-market-data/) orderbook data and trade execution data, since most exchanges readily provide those in the public domain.
 For now this is streamed through **WebSockets**, although I plan to implement [FIX](https://www.investopedia.com/terms/f/financial-information-exchange.asp) exchanges that support it.
 
-**Mantra** handles _L2OrderBooks_ per _Instrument_ per _Exchange_. They are implemented in a relatively standard way, using _BTreeMaps_ for the _bid_ and _ask_ sides to facilitate easy insertion, removal and in-order scanning of price levels.
+**Mantra** handles `L2OrderBooks` per `Instrument` per `Exchange`. They are implemented in a relatively standard way, using `BTreeMaps` for the `bid` and `ask` sides to facilitate easy insertion, removal and in-order scanning of price levels.
 
-What is perhaps more interesting is that **Mantra** is continuously capturing and archiving all incoming _L2Update_ and _TradeUpdate_ messages for the 5 _Exchanges_ I am currently connecting to: Binance, Bitfinex, Bitstamp, Coinbase and Kraken.
-With "all" I mean literally all, i.e. the data for every single spot _Instrument_ that is tradable on these exchanges.
-This leads to quite a lot of data, so I use [_bitcode_](https://docs.rs/bitcode/latest/bitcode/#) together with [_zstd_](https://docs.rs/zstd/latest/zstd/#) to achieve quite impressive data compression ratios of ~20x.
+What is perhaps more interesting is that **Mantra** is continuously capturing and archiving all incoming `L2Update` and `TradeUpdate` messages for the 5 `Exchanges` I am currently connecting to: Binance, Bitfinex, Bitstamp, Coinbase and Kraken.
+With "all" I mean literally all, i.e. the data for every single spot `Instrument` that is tradable on these exchanges.
+This leads to quite a lot of data, so I use [`bitcode`](https://docs.rs/bitcode/latest/bitcode/#) together with [`zstd`](https://docs.rs/zstd/latest/zstd/#) to achieve quite impressive data compression ratios of ~20x.
 
 Some quick numbers are:
 - 169 simultaneous websocket connections
-- 5764 _Instruments_ accross 5 exchanges
+- 5764 `Instruments` accross 5 exchanges
 - up to 200k msgs/s handled
 - up to 47 Gb / day
 - 2.9 Tb worth of data so far
@@ -143,7 +143,7 @@ Some quick numbers are:
 I am of the very strong opinion that representative **backtests** should be performed as much as possible on the **"in-production"** system rather than through some idealized transformations of DataFrames (although that is perfect for initial strategy exploration).
 This is especially true for *low-latency* systems, given how tightly coupled the performance and implementation of the system are with the trading algos and their parameters.
 
-I have thus implemented a _MockExchange_ which feeds the captured historic market data back into the system, and simultaneously uses it to mimic the behavior of a real _Exchange_.
+I have thus implemented a `MockExchange` which feeds the captured historic market data back into the system, and simultaneously uses it to mimic the behavior of a real `Exchange`.
 Of course there are some approximations here, but it nonetheless provides a successful strategy for backtesting the system as a whole.
 
 This gives only a very short glimpse into this relatively deep topic, and I have some interesting additional experiments planned for the multi series of blog posts on Market Data.
@@ -152,12 +152,12 @@ This gives only a very short glimpse into this relatively deep topic, and I have
 Based on the overview the initially planned blog posts are:
 1. **Low latency inter core/process communication**; Seqlocks, broadcasting message queues and synchronized arrays
 2. **High performance in-situ telemetry and message tracking**; How every message is tracked and every part of **Mantra** is timed
-3. **Market Data**; Large scale ingestion and storage, _MockExchange_ and L2 Orderbooks
-4. **UI**; A closer look at _egui_ and how it can be used as a high performance timeseries analysis tool
+3. **Market Data**; Large scale ingestion and storage, `MockExchange` and L2 Orderbooks
+4. **UI**; A closer look at `egui` and how it can be used as a high performance timeseries analysis tool
 
 # Planned Future Work on **Mantra**
 - [ ] FIX connections
-- [ ] Order queue position in the _MockExchange_
+- [ ] Order queue position in the `MockExchange`
 - [ ] Improved parsing of market data messages and direct NIC access
 - [ ] More backtest performance metrics
 - [ ] More advanced market data based signal generation
