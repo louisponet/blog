@@ -9,8 +9,8 @@ comment = true
 +++
 
 I started work on **Mantra** in an effort to learn **rust** and explore the development process of a distributed, high-frequency/low-latency trading system in the language.
-From the get go, I've targeted an internal [tick-to-trade](https://beeksgroup.com/blog/tick-to-trade-is-it-the-new-must-have-metric-in-trading-performance/) latency in the low microsecond range.
-While this has forced me to thread carefully when adding an ever increasing amount of capabilities and features, **Mantra's** internal latency has always remained firmly below this target.
+It targets internal [tick-to-trade](https://beeksgroup.com/blog/tick-to-trade-is-it-the-new-must-have-metric-in-trading-performance/) latencies in the low microsecond range, depending on algo complexity.
+To help me keep this target, each part of the system is automatically timed, and the flow of data is fully tracked.
 
 **Mantra** itself will remain closed source, for obvious reasons, but I feel that some of the solutions and designs supporting it are worth sharing, hence this blog.
 
