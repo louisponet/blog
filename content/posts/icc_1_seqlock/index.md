@@ -8,7 +8,8 @@ tags =  ["mantra", "icc", "seqlock"]
 comment = true
 +++
 
-As the first technical topic in this blog, I will discuss the main method of inter core synchronization used in [**Mantra**](@/posts/hello_world/index.md): a `SeqLock`. It forms the fundamental building block for the "real" datastructures: `Queues` and `SeqLockVectors`, which will be the topic of the next blog post.
+As the first technical topic in this blog, I will discuss the main method of inter core synchronization used in [**Mantra**](@/posts/hello_world/index.md): a `SeqLock`.
+It forms the fundamental building block for the "real" datastructures: `Queues` and `SeqLockVectors`, which will be the topic of the next blog post.
 
 While designing the inter core communication (icc) layer,  have taken a great deal of inspiration from
 - [Trading at light speed](https://www.youtube.com/watch?v=8uAW5FQtcvE) by David Gross
@@ -177,7 +178,9 @@ We do the same for the `write` function to avoid similar shenanigans there.
 Even though the tests now pass without using any barriers, we proceed with a double check by analyzing the assembly that was produced by the compiler.
 
 ## Deeper dive using [`cargo asm`](https://crates.io/crates/cargo-show-asm/0.2.34)
-`cargo asm` is for sure one of the best tools for this kind of analysis, with [godbolt](https://godbolt.org) being another. I highly recommend adding `#[inline(never)]` to isolate the function of interest from the rest of the code.
+I used `cargo asm` to perform the analysis presented below. It can be easily installed using `cargo` and has a very user friendly terminal based interface to hone in on the code of interest.
+[godbolt](https://godbolt.org) is another great choice, but when working on a larger codebase it become quite cumbersome to copy-paste all the supporting code for a given function.
+I recommend adding `#[inline(never)]` to force the compiler not to inline the function of interest.
 
 ### `SeqLock::<[usize; 1024]>::read`
 When using a large array with 1024 elements, the `rust` code compiles down to
