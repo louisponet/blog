@@ -11,7 +11,12 @@ comment = true
 As the first technical topic in this blog, I will discuss the main method of synchronizing the inter core communication used in [**Mantra**](@/posts/hello_world/index.md): a `Seqlock`.
 It forms the fundamental building block for the "real" communication datastructures: `Queues` and `SeqlockVectors`, which will be the topic of the next blog post.
 
-After quickly considering the requirements that made me choose the `Seqlock`, I will not make those in a hurry wait and get straight to the final implementation.
+I have chosen the `Seqlock` because it is a lock-free synchronization primitive that is simple and should be capable of achieving almost the ideal core-to-core latency.
+Moreover, reading from the `Seqlock` does not require taking a lock at all. The worst case is that a `Consumer` needs to read multiple times until the `Producer` is done writing.
+This favors `Producers` over `Consumers` and also makes `Consumers` not impact eachother.
+This is ideal for a low-latency trading system, since we do not want a single `Consumer` or `Produce` that fails or is slow to bring the whole system to a halt.
+
+I will start by getting straight to the final implemenation for those in a hurry.
 
 We then continue with the whys behind that implementation. First we discuss how to verify the correctness of a `Seqlock` implementation. This will demonstrate how the concept of memory barriers is necessary to make it reliable.
 We investigate this by designing tests, observing the potential pitfalls of function inlining, looking at some assembly code (funky), and strong-arming the compiler to do our bidding.
