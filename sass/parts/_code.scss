@@ -111,3 +111,8 @@ pre code[class*="language-rs"]::before {
   background: #fff8f6;
   color: #ff4647;
 }
+// The line number cells
+pre table td:nth-of-type(1) {
+  text-align: center;
+  user-select: none;
+}

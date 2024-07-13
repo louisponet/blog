@@ -4,7 +4,7 @@ base_url = "https://louisponet.github.io/blog"
 title = "Louis Ponet"
 description = "My Blog"
 build_search_index = false
-generate_feed = true
+generate_feeds = true
 compile_sass = true
 minify_html = true
 taxonomies = [{ name = "tags" }]
