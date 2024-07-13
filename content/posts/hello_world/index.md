@@ -73,7 +73,9 @@ Centering the system around multi-consumer message `Queues` immediately fullfils
 Since it's clear that **Mantra** rides or dies depending on how well the inter-core communication layer is implemented, we continue with a closer look on this part.
 
 ## Inter Core Communication (ICC)
+
 ![](Queue.svg#noborder)
+
 *Fig 2. Seqlocked Buffer*
 
 ### `Queue`

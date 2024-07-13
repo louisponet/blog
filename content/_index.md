@@ -2,6 +2,7 @@
 [extra]
 section_path = "posts/_index.md"
 header = {title = "Hi!"}
+insert_anchor_links = "heading"
 +++
 
 This site is a collection of technical articles, thoughts and demonstrations of various topics I encounter on my journey into the world of Quantitative Finance.

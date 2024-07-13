@@ -124,9 +124,7 @@ For the latter functionality we use the [`shared_memory`](https://docs.rs/shared
 
 The notably tricky parts of the code are highlighted. They mostly involve jumping through some hoops to make sure that opened shared memory does not get automatically cleaned up (i.e. by using `forget`), and how we can create the slice `buffer` of `Seqlocks` from the raw shared memory pointer.
 
-> **Note:**
-> As dadf
-
+{{ note(header="Note!", body="This blog assumes basic terminal maturity") }}
 # SPMC/MPMC Message Queues
 Now that we have meticulously crafted, thoroughly tested and (possibly) fully optimized our `SeqLock` implementation, we can start using it in actually useful data structures.
 
