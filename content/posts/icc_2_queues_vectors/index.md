@@ -122,9 +122,9 @@ impl<T: Copy> SeqlockVector<T> {
 The total size of a `SeqlockVector<T>` is given by the `size_of` function, `private` creates a new `SeqlockVector` in private memory only, and `shared` creates a new, or opens an existing `SeqlockVector` in shared memory.
 For the latter functionality we use the [`shared_memory`](https://docs.rs/shared_memory/latest/shared_memory/) crate.
 
-The notably tricky parts of the code are highlighted. They mostly involve jumping through some hoops to make sure that opened shared memory does not get automatically cleaned up (i.e. by using `forget`), and how we can create the slice `buffer` of `Seqlocks` from the raw shared memory pointer.
+The notably tricky parts of the code are highlighted. They mostly involve jumping through some hoops to make sure that opened shared memory does not get automatically cleaned up (i.e. by using `forget`), and how we can create a reference to the `SeqlockedVector` from the raw shared memory pointer.
 
-{{ note(header="Note!", body="This blog assumes basic terminal maturity") }}
+{{ note(header="Note!", body="Even though `slice_from_raw_parts_mut` is used to create a reference to the whole `SeqlockVector`, the `length` argument denotes the length of the unsized `buffer` slice only!") }}
 # SPMC/MPMC Message Queues
 Now that we have meticulously crafted, thoroughly tested and (possibly) fully optimized our `SeqLock` implementation, we can start using it in actually useful data structures.
 
