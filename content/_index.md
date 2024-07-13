@@ -5,4 +5,4 @@ header = {title = "Hi!"}
 +++
 
 This site is a collection of technical articles, thoughts and demonstrations of various topics I encounter on my journey into the world of Quantitative Finance.
-Most initially will involve my work on a low latency [trading engine](@/posts/hello_world/index.md) written in **rust**.
+The initial posts will be focused around the low latency [trading engine](@/posts/hello_world/index.md) that I have been writing in **rust**.
