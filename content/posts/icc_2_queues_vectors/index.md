@@ -19,6 +19,8 @@ Given that `SeqlockVectors` are the most straightforward of the two datastructur
 
 As the name suggests, a `SeqlockVector` is really not much more than a contiguous buffer of `Seqlocks`.
 The way that they are implemented below allows for them to be constructed either in the private memory of a process, i.e. allocated by the global `rust` allocator, or in a piece of shared memory created by the OS.
+
+## SeqlockVectorHeader
 To maximize the `SeqlockVector's` flexibility we also want it to describe itself to some degree.
 
 This can be achived by preceding the buffer of `Seqlocks` with the following `SeqlockVectorHeader` structure:
@@ -34,7 +36,8 @@ While it might not seem like much, this allows a process to read the `SeqlockHea
 and thus the total bytesize of the `SeqlockVector`: `elsize * bufsize + std::mem::size_of::<VectorHeader>()`. We use `[repr(C)]` again to make sure that the compiler does not reorder the struct fields.
 This is mainly useful when accessing the `SeqlockVector` in shared memory by programs implemented in programming languages other than rust (although technically fields could be ordered differently by rust compilers with different versions).
 
-The `SeqlockVector` itself is implemented as:
+## Initialization
+The `SeqlockVector` itself, and its initialization is implemented as:
 ```rust,linenos, hl_lines= 40 53 68 79
 use std::mem::{size_of, forget};
 use std::ptr::slice_from_raw_parts_mut;
@@ -117,6 +120,10 @@ impl<T: Copy> SeqlockVector<T> {
             &*(slice_from_raw_parts_mut(ptr, bufsize) as *const SeqlockVector<T>)
         }
     }
+
+    pub fn len(&self) -> usize {
+        self.header.bufsize
+    }
 }
 ```
 The total size of a `SeqlockVector<T>` is given by the `size_of` function, `private` creates a new `SeqlockVector` in private memory only, and `shared` creates a new, or opens an existing `SeqlockVector` in shared memory.
@@ -125,6 +132,53 @@ For the latter functionality we use the [`shared_memory`](https://docs.rs/shared
 The notably tricky parts of the code are highlighted. They mostly involve jumping through some hoops to make sure that opened shared memory does not get automatically cleaned up (i.e. by using `forget`), and how we can create a reference to the `SeqlockedVector` from the raw shared memory pointer.
 
 {{ note(header="Note!", body="Even though `slice_from_raw_parts_mut` is used to create a reference to the whole `SeqlockVector`, the `length` argument denotes the length of the unsized `buffer` slice only!") }}
+
+## Read/write
+The `read` and `write` implementations of the `SeqlockVector` are straightforwardly based on those of the [`Seqlock`](@/posts/icc_1_seqlock/index.md#tl-dr). See the code [here](https://github.com/louisponet/blog/posts/icc_2_queues_vectors/code/).
+
+```rust
+fn load(&self, pos: usize) -> &SeqLock<T> {
+    unsafe { self.buffer.get_unchecked(pos) }
+}
+
+fn pos_assert(&self, pos: usize) {
+    assert!(pos < self.len(), "OutOfBounds: index {pos} larger than size {}", self.header.bufsize);
+}
+
+pub fn write_unchecked(&self, pos: usize, item: &T) {
+    let lock = self.load(pos);
+    lock.write(item);
+}
+
+pub fn write(&self, pos: usize, item: &T) {
+    self.pos_assert(pos);
+    self.write_unchecked(pos, item);
+}
+
+pub fn read_unchecked(&self, pos: usize, result: &mut T) {
+    let lock = self.load(pos);
+    lock.read_no_ver(result);
+}
+
+pub fn read(&self, pos: usize, result: &mut T) {
+    self.pos_assert(pos);
+    self.read_unchecked(pos, result)
+}
+
+pub fn read_copy_unchecked(&self, pos:usize) -> T {
+    let mut out = unsafe {MaybeUninit::uninit().assume_init()};
+    let lock = self.load(pos);
+    lock.read_no_ver(&mut out);
+    out
+}
+pub fn read_copy(&self, pos: usize) -> T {
+    self.pos_assert(pos);
+    self.read_copy_unchecked(pos)
+}
+
+```
+
+
 # SPMC/MPMC Message Queues
 Now that we have meticulously crafted, thoroughly tested and (possibly) fully optimized our `SeqLock` implementation, we can start using it in actually useful data structures.
 
