@@ -11,7 +11,7 @@ pub struct VectorHeader {
 #[repr(C, align(64))]
 pub struct SeqlockVector<T> {
     header: VectorHeader,
-    buffer: [SeqLock<T>],
+    buffer: [Seqlock<T>],
 }
 impl<T: Copy> SeqlockVector<T> {
     pub fn new(len: usize) -> &'static Self {
@@ -31,7 +31,7 @@ impl<T: Copy> SeqlockVector<T> {
 
     pub const fn size_of(len: usize) -> usize {
         std::mem::size_of::<VectorHeader>()
-            + len * std::mem::size_of::<SeqLock<T>>()
+            + len * std::mem::size_of::<Seqlock<T>>()
     }
 
     pub fn from_uninitialized_ptr(
@@ -42,7 +42,7 @@ impl<T: Copy> SeqlockVector<T> {
             // why len? because the size in the fat pointer ONLY cares about the unsized part of the struct
             // i.e. the length of the buffer
             let q = &mut *(std::ptr::slice_from_raw_parts_mut(ptr, len) as *mut SeqlockVector<T>);
-            let elsize = std::mem::size_of::<SeqLock<T>>();
+            let elsize = std::mem::size_of::<Seqlock<T>>();
             q.header.bufsize = len;
             q.header.elsize = elsize;
             q
@@ -61,7 +61,7 @@ impl<T: Copy> SeqlockVector<T> {
         self.header.bufsize
     }
 
-    fn load(&self, pos: usize) -> &SeqLock<T> {
+    fn load(&self, pos: usize) -> &Seqlock<T> {
         unsafe { self.buffer.get_unchecked(pos) }
     }
 
@@ -81,7 +81,7 @@ impl<T: Copy> SeqlockVector<T> {
 
     pub fn read_unchecked(&self, pos: usize, result: &mut T) {
         let lock = self.load(pos);
-        lock.read_no_ver(result);
+        lock.read(result);
     }
 
     pub fn read(&self, pos: usize, result: &mut T) {
@@ -92,7 +92,7 @@ impl<T: Copy> SeqlockVector<T> {
     pub fn read_copy_unchecked(&self, pos:usize) -> T {
         let mut out = unsafe {MaybeUninit::uninit().assume_init()};
         let lock = self.load(pos);
-        lock.read_no_ver(&mut out);
+        lock.read(&mut out);
         out
     }
     pub fn read_copy(&self, pos: usize) -> T {

@@ -1,7 +1,5 @@
-use std::arch::x86_64::{__rdtscp, _mm_clflush, _mm_lfence};
-use std::sync::atomic::{compiler_fence, fence, AtomicBool, AtomicI32, AtomicUsize, Ordering};
-use std::sync::{Arc, Barrier};
-use std::time::Duration;
+use std::arch::x86_64::__rdtscp;
+use std::sync::atomic::{AtomicI32, Ordering};
 
 use code::SeqLock;
 // use ma_queues::seqlock::SeqLock;
@@ -97,8 +95,7 @@ fn timed_consumer(lock: &SeqLock<TimingMessage>)
         timer.start();
         lock.read(&mut m);
         if m.rdtscp != last {
-            timer.stop();
-            timer.latency_till_stop(m.rdtscp);
+            timer.stop_and_latency(m.rdtscp);
         }
         last = m.rdtscp;
     }

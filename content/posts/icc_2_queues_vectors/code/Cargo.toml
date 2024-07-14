@@ -6,11 +6,9 @@ edition = "2021"
 [dependencies]
 core_affinity = "0.8.1"
 rand = "0.8.5"
-ma_timing = {path = "/home/ponet/Software/rustdev/ma_timing/crates/ma_timing"}
-ma_time = {path = "/home/ponet/Software/rustdev/ma_timing/crates/ma_time"}
-ma_queues= {path = "/home/ponet/Software/rustdev/ma_ipc/crates/ma_queues"}
-ctrlc = "3.4.4"
-iced-x86 = { version = "1.21.0" }
+ma_timing = {git = "https://github.com/louisponet/ma_timing"}
+ma_time =   {git = "https://github.com/louisponet/ma_timing"}
+thiserror = "*"
 [dev-dependencies]
 criterion = "*"
 quanta = "*"

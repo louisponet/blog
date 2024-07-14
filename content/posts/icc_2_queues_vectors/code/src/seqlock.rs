@@ -1,20 +1,32 @@
 use std::arch::x86_64::_mm_pause;
-use std::slice::SliceIndex;
 use std::cell::UnsafeCell;
+use std::slice::SliceIndex;
 use std::sync::atomic::{compiler_fence, fence, AtomicUsize, Ordering};
+use thiserror::Error;
+
+#[derive(Error, Debug, Copy, Clone, PartialEq)]
+pub enum ReadError {
+    #[error("Got sped past")]
+    SpedPast,
+    #[error("Queue empty")]
+    Empty,
+}
 
 #[derive(Default)]
 #[repr(align(64))]
-pub struct SeqLock<T> {
+pub struct Seqlock<T> {
     version: AtomicUsize,
     data: UnsafeCell<T>,
 }
-unsafe impl<T: Send> Send for SeqLock<T> {}
-unsafe impl<T: Sync> Sync for SeqLock<T> {}
+unsafe impl<T: Send> Send for Seqlock<T> {}
+unsafe impl<T: Sync> Sync for Seqlock<T> {}
 
-impl<T: Copy> SeqLock<T> {
+impl<T: Copy> Seqlock<T> {
     pub fn new(data: T) -> Self {
-        Self {version: AtomicUsize::new(0), data: UnsafeCell::new(data)}
+        Self {
+            version: AtomicUsize::new(0),
+            data: UnsafeCell::new(data),
+        }
     }
     #[inline(never)]
     pub fn read(&self, result: &mut T) {
@@ -31,6 +43,31 @@ impl<T: Copy> SeqLock<T> {
     }
 
     #[inline(never)]
+    pub fn read_with_version(
+        &self,
+        result: &mut T,
+        expected_version: usize,
+    ) -> Result<(), ReadError> {
+        loop {
+            let v1 = self.version.load(Ordering::Acquire);
+            if v1 != expected_version {
+                if v1 < expected_version {
+                    return Err(ReadError::Empty);
+                } else {
+                    return Err(ReadError::SpedPast);
+                }
+            }
+
+            compiler_fence(Ordering::AcqRel);
+            *result = unsafe { *self.data.get() };
+            compiler_fence(Ordering::AcqRel);
+            let v2 = self.version.load(Ordering::Acquire);
+            if v1 == v2 {
+                return Ok(());
+            }
+        }
+    }
+    #[inline(never)]
     pub fn write(&self, val: &T) {
         let v = self.version.fetch_add(1, Ordering::Release);
         compiler_fence(Ordering::AcqRel);
@@ -43,11 +80,13 @@ impl<T: Copy> SeqLock<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{sync::atomic::AtomicBool, time::{Duration, Instant}};
+    use std::{
+        sync::atomic::AtomicBool,
+        time::{Duration, Instant},
+    };
 
-    fn read_test<const N: usize>()
-    {
-        let lock = SeqLock::new([0usize; N]);
+    fn read_test<const N: usize>() {
+        let lock = Seqlock::new([0usize; N]);
         let done = AtomicBool::new(false);
         std::thread::scope(|s| {
             s.spawn(|| {
@@ -72,7 +111,6 @@ mod tests {
                 }
                 done.store(true, Ordering::Relaxed);
             });
-
         });
     }
 
@@ -94,9 +132,6 @@ mod tests {
     }
     #[test]
     fn read_large() {
-        read_test::<{2usize.pow(16)}>()
+        read_test::<{ 2usize.pow(16) }>()
     }
 }
-
-
-

@@ -3,8 +3,7 @@ use std::sync::atomic::{compiler_fence, fence, AtomicBool, AtomicI32, AtomicUsiz
 use std::sync::{Arc, Barrier};
 use std::time::Duration;
 
-use code::SeqLock;
-// use ma_queues::seqlock::SeqLock;
+use code::seqlock::Seqlock;
 use core_affinity::CoreId;
 use ma_time::{Instant, Nanos};
 use ma_timing::Timer;
@@ -79,7 +78,7 @@ struct TimingMessage {
     data:   [u8; 1],
 }
 
-fn contender(lock: &SeqLock<TimingMessage>)
+fn contender(lock: &Seqlock<TimingMessage>)
 {
     let mut m = TimingMessage { rdtscp: Instant::now(), data: [0]};
     while m.data[0] == 0 {
@@ -87,7 +86,7 @@ fn contender(lock: &SeqLock<TimingMessage>)
     }
 }
 
-fn timed_consumer(lock: &SeqLock<TimingMessage>)
+fn timed_consumer(lock: &Seqlock<TimingMessage>)
 {
     let mut timer = Timer::new("read");
     core_affinity::set_for_current(CoreId { id: 1 });
@@ -97,14 +96,13 @@ fn timed_consumer(lock: &SeqLock<TimingMessage>)
         timer.start();
         lock.read(&mut m);
         if m.rdtscp != last {
-            timer.stop();
-            timer.latency_till_stop(m.rdtscp);
+            timer.stop_and_latency(m.rdtscp);
         }
         last = m.rdtscp;
     }
 }
 
-fn producer(lock: &SeqLock<TimingMessage>)
+fn producer(lock: &Seqlock<TimingMessage>)
 {
     let mut timer = Timer::new("write");
     core_affinity::set_for_current(CoreId { id: 2 });
@@ -123,7 +121,7 @@ fn producer(lock: &SeqLock<TimingMessage>)
 }
 
 fn consumer_latency(n_contenders: usize) {
-    let lock = SeqLock::default();
+    let lock = Seqlock::default();
     std::thread::scope(|s| {
         for i in 1..(n_contenders + 1) {
             let lck = &lock;
