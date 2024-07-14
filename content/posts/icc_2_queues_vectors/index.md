@@ -17,13 +17,18 @@ Given that `SeqlockVectors` are the most straightforward of the two datastructur
 
 # SeqlockVector
 
-As the name suggests, a `SeqlockVector` is really not much more than a contiguous buffer of `Seqlocks`.
-The way that they are implemented below allows for them to be constructed either in the private memory of a process, i.e. allocated by the global `rust` allocator, or in a piece of shared memory created by the OS.
+As the name suggests, a `SeqlockVector` is really not much more than a contiguous buffer of `Seqlocks`, as shown by the image below.
+Each triple of `[Version, Data, Padding]` denotes one `Seqlock`.
+
+The implementation we discuss here allows for them to be constructed either in the private memory of a process, i.e. allocated by the global `rust` allocator, or in a piece of shared memory created by the OS.
+
+![](SeqlockVector.svg#noborder "SeqlockVector")
+*Fig 1. SeqlockVector*
 
 ## SeqlockVectorHeader
 To maximize the `SeqlockVector's` flexibility we also want it to describe itself to some degree.
 
-This can be achived by preceding the buffer of `Seqlocks` with the following `SeqlockVectorHeader` structure:
+This can be achived by preceding the buffer of `Seqlocks` with the following `SeqlockVectorHeader` structure (shown in blue in the above figure):
 ```rust
 #[derive(Debug)]
 #[repr(C)]
@@ -134,50 +139,7 @@ The notably tricky parts of the code are highlighted. They mostly involve jumpin
 {{ note(header="Note!", body="Even though `slice_from_raw_parts_mut` is used to create a reference to the whole `SeqlockVector`, the `length` argument denotes the length of the unsized `buffer` slice only!") }}
 
 ## Read/write
-The `read` and `write` implementations of the `SeqlockVector` are straightforwardly based on those of the [`Seqlock`](@/posts/icc_1_seqlock/index.md#tl-dr). See the code [here](https://github.com/louisponet/blog/posts/icc_2_queues_vectors/code/).
-
-```rust
-fn load(&self, pos: usize) -> &SeqLock<T> {
-    unsafe { self.buffer.get_unchecked(pos) }
-}
-
-fn pos_assert(&self, pos: usize) {
-    assert!(pos < self.len(), "OutOfBounds: index {pos} larger than size {}", self.header.bufsize);
-}
-
-pub fn write_unchecked(&self, pos: usize, item: &T) {
-    let lock = self.load(pos);
-    lock.write(item);
-}
-
-pub fn write(&self, pos: usize, item: &T) {
-    self.pos_assert(pos);
-    self.write_unchecked(pos, item);
-}
-
-pub fn read_unchecked(&self, pos: usize, result: &mut T) {
-    let lock = self.load(pos);
-    lock.read_no_ver(result);
-}
-
-pub fn read(&self, pos: usize, result: &mut T) {
-    self.pos_assert(pos);
-    self.read_unchecked(pos, result)
-}
-
-pub fn read_copy_unchecked(&self, pos:usize) -> T {
-    let mut out = unsafe {MaybeUninit::uninit().assume_init()};
-    let lock = self.load(pos);
-    lock.read_no_ver(&mut out);
-    out
-}
-pub fn read_copy(&self, pos: usize) -> T {
-    self.pos_assert(pos);
-    self.read_copy_unchecked(pos)
-}
-
-```
-
+The `read` and `write` implementations of the `SeqlockVector` are straightforwardly based on those of the [`Seqlock`](@/posts/icc_1_seqlock/index.md#tl-dr). See the code [here](https://github.com/louisponet/blog/blob/cd94640d5b372ae7cccfcae3bd366929284897a2/content/posts/icc_2_queues_vectors/code/src/vector.rs#L64-L106).
 
 # SPMC/MPMC Message Queues
 Now that we have meticulously crafted, thoroughly tested and (possibly) fully optimized our `SeqLock` implementation, we can start using it in actually useful data structures.
@@ -216,4 +178,3 @@ The flow shown below should make the idea clear
 
 
 
-# Seqlocked Buffers
