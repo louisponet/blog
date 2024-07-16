@@ -1,7 +1,7 @@
 use std::arch::x86_64::__rdtscp;
 use std::sync::atomic::{AtomicI32, Ordering};
 
-use code::SeqLock;
+use code::Seqlock;
 // use ma_queues::seqlock::SeqLock;
 use core_affinity::CoreId;
 use ma_time::{Instant, Nanos};
@@ -19,6 +19,31 @@ impl Default for TimingMessage {
 fn rdtscp() -> u64 {
     unsafe { __rdtscp(&mut 0u32 as *mut _) }
 }
+
+// New observations.
+// # benchmark, not realistic maybe
+// baseline: writing 1 consumer -> 21-37 nanos
+//           reading 1 consumer -> 45-50 nanos
+// padding with [u8; 56]: writing 1 consumer -> 60 - 78 ns
+//                        reading 1 consumer -> 92-110 ns
+// + pessimistic_reading: writing 1 consumer -> 17(!) - 44(?) ns
+//                      : reading 1 consumer -> 100 - 210ns
+//
+// # actual latency
+// baseline: writing 1 consumer -> 21-37 nanos
+//           reading 1 consumer -> 45-50 nanos
+// padding with [u8; 56]: writing 1 consumer -> 28 - 35ns
+//                        reading 1 consumer -> 60-62 ns
+// + pessimistic_reading: writing 1 consumer -> 28-35 ns
+//                      : reading 1 consumer -> 41ns(all stars aligned, 1/10) 60-64ns (9/10) avg/med
+//
+//  no fetch_add + baseline    + no_padding: 93 ns
+//  no fetch_add + pessimistic + no_padding: 97 ns
+//  no fetch_add + pessimistic + padding:    90 ns
+
+
+// false sharing 128 bit?
+//
 
 // const N: usize = 1;
 // #[inline(never)]
@@ -77,7 +102,7 @@ struct TimingMessage {
     data:   [u8; 1],
 }
 
-fn contender(lock: &SeqLock<TimingMessage>)
+fn contender(lock: &Seqlock<TimingMessage>)
 {
     let mut m = TimingMessage { rdtscp: Instant::now(), data: [0]};
     while m.data[0] == 0 {
@@ -85,7 +110,7 @@ fn contender(lock: &SeqLock<TimingMessage>)
     }
 }
 
-fn timed_consumer(lock: &SeqLock<TimingMessage>)
+fn timed_consumer(lock: &Seqlock<TimingMessage>)
 {
     let mut timer = Timer::new("read");
     core_affinity::set_for_current(CoreId { id: 1 });
@@ -101,7 +126,7 @@ fn timed_consumer(lock: &SeqLock<TimingMessage>)
     }
 }
 
-fn producer(lock: &SeqLock<TimingMessage>)
+fn producer(lock: &Seqlock<TimingMessage>)
 {
     let mut timer = Timer::new("write");
     core_affinity::set_for_current(CoreId { id: 2 });
@@ -120,7 +145,7 @@ fn producer(lock: &SeqLock<TimingMessage>)
 }
 
 fn consumer_latency(n_contenders: usize) {
-    let lock = SeqLock::default();
+    let lock = Seqlock::default();
     std::thread::scope(|s| {
         for i in 1..(n_contenders + 1) {
             let lck = &lock;
@@ -148,7 +173,7 @@ fn one_way_2_lines(n_samples:usize) {
     let seq2 = Test {flag: AtomicI32::new(-1)};
     std::thread::scope(|s| {
         s.spawn(|| {
-            core_affinity::set_for_current(CoreId { id: 2});
+            core_affinity::set_for_current(CoreId { id: 1});
             for _ in 0..n_samples {
                 for n in 0..10000 {
                     while seq1.flag.load(Ordering::Acquire) != n {}
@@ -172,7 +197,35 @@ fn one_way_2_lines(n_samples:usize) {
     });
 }
 
+fn one_way_2_lines_shared(n_samples:usize) {
+    let seq = [Test {flag: AtomicI32::new(-1)}, Test {flag: AtomicI32::new(-1)}];
+    std::thread::scope(|s| {
+        s.spawn(|| {
+            core_affinity::set_for_current(CoreId { id: 1});
+            for _ in 0..n_samples {
+                for n in 0..10000 {
+                    while seq[0].flag.load(Ordering::Acquire) != n {}
+                    seq[1].flag.store(n, Ordering::Release);
+                }
+            }
+        });
+        s.spawn(|| {
+            let mut timer = Timer::new("one_way_2_lines");
+            core_affinity::set_for_current(CoreId { id: 3 });
+            for _ in 0..n_samples {
+                let mut c = 0;
+                for n in 0..10000 {
+                    timer.start();
+                    seq[0].flag.store(n, Ordering::Release);
+                    while seq[1].flag.load(Ordering::Acquire) != n {c+=1}
+                    timer.stop();
+                }
+            }
+        });
+    });
+}
+
 pub fn main() {
-    // one_way_2_lines(1000000);
+    // one_way_2_lines_shared(1000000);
     consumer_latency(0);
 }

@@ -1,36 +1,48 @@
-use std::arch::x86_64::_mm_pause;
-use std::slice::SliceIndex;
-use std::cell::UnsafeCell;
-use std::sync::atomic::{compiler_fence, fence, AtomicUsize, Ordering};
+use std::{
+    arch::x86_64::_mm_pause,
+    cell::UnsafeCell,
+    slice::SliceIndex,
+    sync::atomic::{compiler_fence, fence, AtomicUsize, Ordering},
+};
 #[inline]
 #[cold]
 fn cold() {}
 
 #[inline]
 fn likely(b: bool) -> bool {
-    if !b { cold() }
+    if !b {
+        cold()
+    }
     b
 }
 
 #[inline]
 fn unlikely(b: bool) -> bool {
-    if b { cold() }
+    if b {
+        cold()
+    }
     b
 }
 
-#[derive(Default)]
 #[repr(align(64))]
-pub struct SeqLock<T> {
+pub struct Seqlock<T> {
     version: AtomicUsize,
-    data: UnsafeCell<T>,
+    _pad: [u8; 56],
+    data:    UnsafeCell<T>,
 }
-unsafe impl<T: Send> Send for SeqLock<T> {}
-unsafe impl<T: Sync> Sync for SeqLock<T> {}
-
-impl<T: Copy> SeqLock<T> {
-    pub fn new(data: T) -> Self {
-        Self {version: AtomicUsize::new(0), data: UnsafeCell::new(data)}
+impl<T: Default> Default for Seqlock<T> {
+    fn default() -> Self {
+        Self { version: Default::default(),  _pad: [0; 56], data: Default::default() }
     }
+}
+unsafe impl<T: Send> Send for Seqlock<T> {}
+unsafe impl<T: Sync> Sync for Seqlock<T> {}
+
+impl<T: Copy> Seqlock<T> {
+    pub fn new(data: T) -> Self {
+        Self { version: Default::default(), _pad: [0; 56], data: UnsafeCell::new(data) }
+    }
+
     #[inline(never)]
     pub fn read(&self, result: &mut T) {
         loop {
@@ -46,6 +58,32 @@ impl<T: Copy> SeqLock<T> {
     }
 
     #[inline(never)]
+    pub fn pessimistic_read(&self, result: &mut T) {
+        loop {
+            let v1 = self.version.load(Ordering::Acquire);
+            if v1 & 1 == 1 {
+                continue;
+            }
+
+            compiler_fence(Ordering::AcqRel);
+            *result = unsafe { *self.data.get() };
+            compiler_fence(Ordering::AcqRel);
+            let v2 = self.version.load(Ordering::Acquire);
+            if v1 == v2 {
+                return;
+            }
+        }
+    }
+
+    #[inline(never)]
+    pub fn write_old(&self, val: &T) {
+        let v = self.version.load(Ordering::Relaxed).wrapping_add(1);
+        self.version.store(v, Ordering::Relaxed);
+        unsafe { *self.data.get() = *val };
+        self.version.store(v.wrapping_add(1), Ordering::Relaxed);
+    }
+
+    #[inline(never)]
     pub fn write(&self, val: &T) {
         let v = self.version.fetch_add(1, Ordering::Release);
         compiler_fence(Ordering::AcqRel);
@@ -57,37 +95,39 @@ impl<T: Copy> SeqLock<T> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use std::{sync::atomic::AtomicBool, time::{Duration, Instant}};
+    use std::{
+        sync::atomic::AtomicBool,
+        time::{Duration, Instant},
+    };
 
-    fn read_test<const N: usize>()
-    {
-        let lock = SeqLock::new([0usize; N]);
+    use super::*;
+
+    fn read_test<const N: usize>() {
+        let lock = Seqlock::new([0usize; N]);
         let done = AtomicBool::new(false);
         std::thread::scope(|s| {
             s.spawn(|| {
-                let mut msg = [0usize; N];
-                while !done.load(Ordering::Relaxed) {
-                    lock.read(&mut msg);
-                    let first = msg[0];
-                    for i in msg {
-                        assert_eq!(first, i); // data consistency is verified here
-                    }
-                }
-                assert_ne!(msg[0], 0)
-            });
+                 let mut msg = [0usize; N];
+                 while !done.load(Ordering::Relaxed) {
+                     lock.read(&mut msg);
+                     let first = msg[0];
+                     for i in msg {
+                         assert_eq!(first, i); // data consistency is verified here
+                     }
+                 }
+                 assert_ne!(msg[0], 0)
+             });
             s.spawn(|| {
-                let curt = Instant::now();
-                let mut count = 0;
-                let mut msg = [0usize; N];
-                while curt.elapsed() < Duration::from_secs(1) {
-                    msg.fill(count);
-                    lock.write(&msg);
-                    count = count.wrapping_add(1);
-                }
-                done.store(true, Ordering::Relaxed);
-            });
-
+                 let curt = Instant::now();
+                 let mut count = 0;
+                 let mut msg = [0usize; N];
+                 while curt.elapsed() < Duration::from_secs(1) {
+                     msg.fill(count);
+                     lock.write(&msg);
+                     count = count.wrapping_add(1);
+                 }
+                 done.store(true, Ordering::Relaxed);
+             });
         });
     }
 
@@ -109,9 +149,6 @@ mod tests {
     }
     #[test]
     fn read_large() {
-        read_test::<{2usize.pow(16)}>()
+        read_test::<{ 2usize.pow(16) }>()
     }
 }
-
-
-
