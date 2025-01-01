@@ -9,7 +9,7 @@ comment = true
 +++
 Happy new year, all!
 
-In this post we will take a slight deviation away from the low level details of implementing a message passing distributed system.
+In this quick post we will take a slight deviation away from the low level details of implementing a message passing distributed system.
 Instead, we focus on a concrete application that the low-latency message `Queues` we implemented [in the previous post](@/posts/icc_2_queues_vectors/index.md) allow for.
 
 # Overview/Context
