@@ -3,7 +3,7 @@ title = "Automatic Message Tracking and Timing"
 date = 2025-01-01
 description = "How Mantra automatically tracks and times each message."
 [taxonomies]
-tags =  ["mantra", "in-situ telemetry"]
+tags =  ["mantra", "telemetry"]
 [extra]
 comment = true
 +++
@@ -20,8 +20,8 @@ While the main system will therefore have to perform a bit more work, the real-w
 In fact, after having implemented the design below, I found that the overhead was so minimal that I forewent the planned feature flag disabling of the tracking.
 
 Moving on, the main telemetry metrics I was interested in are:
-- message propagation latency: "how long does it take for downstream messages to arrive at different parts of the system based on an ingested message"
-- message processing time: "how long does it take for message of type `T` to be processed by system `X`"
+- message propagation latency: how long does it take for downstream messages to arrive at different parts of the system based on an ingested message
+- message processing time: how long does it take for message of type `T` to be processed by system `X`
 - what are the downstream message produced by a given ingested message
 
 This post will detail the message tracking design in **Mantra** to handle all of this as seemlessly as possible.
@@ -52,7 +52,7 @@ pub struct QueueMessage<T> {
 ```
 
 # `Actor`, `Spine` and `SpineAdapters`
-Now, it becomes extremely tedious and ugly if each of the `Producers` and `Consumers` has to take care of unpacking the `data`, process it, and then produce a new `QueueMessage` with the correct `origin_t` and `publish_t`, while also publishing the timing telemetry to the right timing queues.
+Now, it becomes extremely tedious and ugly if each of the `Producers` and `Consumers` have to take care of unpacking the `data`, process it, and then produce a new `QueueMessage` with the correct `origin_t` and `publish_t`, while also publishing the timing telemetry to the right timing queues.
 Instead, I designed **Mantra** in such a way that all of this is handled behind the scenes, and sub-systems can just take care of their business logic.
 
 We start by defining an `Actor` trait which is implemented by each sub-system. An `Actor` has a `name` which is used to create timing queues, a `loop_body` implementing the business logic, and potentially the `on_init` and `on_exit` functions which are called before the main `Actor` loop starts and after it finishes, respectively.
@@ -91,7 +91,8 @@ This looks a bit convoluted, but it is this combined `SpineAdapter` structure th
 the `timestamp` of that message is set on the `SpineProducers`, which is then attached to whatever message that the `Actor` produces based on the consumed one.
 It completely solves the first issue of manually having to unpack and repack each message.
 
-The second part is the automatic latency and processing time tracking of the messages. To enable this, we define a slightly augmented `Consumer` that holds a `Timer`:
+The second part is the automatic latency and processing time tracking of the messages. To enable this, we define a slightly augmented `Consumer` that holds a [`Timer`](@/posts/icc_1_seqlock/index.md#timing-101):
+
 ```rust
 #[derive(Clone, Copy, Debug)]
 pub struct Consumer<T: 'static + Copy + Default> {
