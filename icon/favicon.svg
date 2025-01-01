@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="8.8800116mm"
+   height="6.621201mm"
+   viewBox="0 0 8.8800115 6.621201"
+   version="1.1"
+   id="svg1"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs1">
+    <rect
+       x="229.11259"
+       y="227.23482"
+       width="282.62076"
+       height="412.59238"
+       id="rect5" />
+    <rect
+       x="229.11259"
+       y="227.23482"
+       width="282.62076"
+       height="412.59238"
+       id="rect5-1" />
+  </defs>
+  <g
+     id="layer1"
+     transform="translate(-55.196584,-62.446938)">
+    <path
+       id="use12"
+       style="stroke:#e05757;stroke-width:0.04;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none"
+       d="m 55.640678,62.887436 h 0.31089 l 0.0067,5.516366 2.934468,-0.0026 -0.05051,0.302414 -3.213596,0.008 z" />
+    <text
+       xml:space="preserve"
+       transform="matrix(0.75779257,0,0,0.75779257,-119.4454,-116.40687)"
+       id="text5"
+       style="font-style:normal;font-variant:normal;font-weight:500;font-stretch:normal;line-height:2.4;font-family:'FiraCode Nerd Font Mono';-inkscape-font-specification:'FiraCode Nerd Font Mono Medium';letter-spacing:5.65px;white-space:pre;shape-inside:url(#rect5);display:inline;fill:#000000;stroke:#e05757;stroke-width:0.245177;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;paint-order:normal"><tspan
+         x="229.11328"
+         y="244.63438"
+         id="tspan2">L</tspan></text>
+    <path
+       id="rect10"
+       style="stroke:#e05757;stroke-width:0.04;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none"
+       d="m 55.640678,62.887436 h 0.31089 l 0.0067,5.516366 2.934468,-0.0026 -0.05051,0.302414 -3.213596,0.008 z" />
+    <use
+       x="0"
+       y="0"
+       xlink:href="#rect10"
+       id="use11" />
+    <text
+       xml:space="preserve"
+       transform="matrix(0.75779257,0,0,0.75779257,-116.3118,-116.39547)"
+       id="text5-9"
+       style="font-style:normal;font-variant:normal;font-weight:500;font-stretch:normal;line-height:2.4;font-family:'FiraCode Nerd Font Mono';-inkscape-font-specification:'FiraCode Nerd Font Mono Medium';letter-spacing:5.65px;white-space:pre;shape-inside:url(#rect5-1);display:inline;fill:#000000;stroke:#e05757;stroke-width:0.245177;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;paint-order:normal"><tspan
+         x="229.11328"
+         y="244.63438"
+         id="tspan3">P</tspan></text>
+    <path
+       d="m 58.554105,62.809639 -0.0014,5.906127 0.409119,-8.02e-4 -0.0045,-2.25679 1.167896,6.76e-4 c 0.415172,2.4e-4 0.750491,-0.06502 1.06844,-0.19374 0.320577,-0.131523 0.493631,-0.310119 0.745238,-0.566674 0.211271,-0.34346 0.227754,-0.613555 0.222884,-1.086512 -0.0064,-0.625332 -0.05512,-0.8357 -0.436942,-1.298369 -0.519697,-0.405275 -0.949303,-0.507983 -1.632497,-0.506732 z m 0.403714,0.318749 1.331604,0.0037 c 0.560677,0.0016 0.909809,0.218184 1.120023,0.386088 0.212842,0.165102 0.379049,0.704756 0.395356,1.101787 0.01756,0.427654 -0.164172,1.035325 -0.528322,1.244593 -0.212842,0.167902 -0.816848,0.284227 -1.158439,0.28665 l -1.143379,0.0081 z"
+       style="font-weight:500;font-size:7.93165px;line-height:2.4;font-family:'FiraCode Nerd Font Mono';-inkscape-font-specification:'FiraCode Nerd Font Mono Medium';letter-spacing:3.7345px;fill:none;stroke:#e05757;stroke-width:0.04;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:none"
+       id="path10" />
+  </g>
+</svg>

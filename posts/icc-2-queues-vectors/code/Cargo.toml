@@ -1,0 +1,21 @@
+[package]
+name = "code"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+core_affinity = "0.8.1"
+rand = "0.8.5"
+ma_timing = {git = "https://github.com/louisponet/ma_timing"}
+ma_time =   {git = "https://github.com/louisponet/ma_timing"}
+thiserror = "*"
+parking_lot = "0.12.3"
+[dev-dependencies]
+criterion = "*"
+quanta = "*"
+[[bin]]
+name = "main"
+path = "src/main.rs"
+[[bench]]
+name = "seqlock"
+harness = false
