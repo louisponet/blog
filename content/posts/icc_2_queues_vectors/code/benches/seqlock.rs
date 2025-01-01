@@ -8,17 +8,28 @@ use core_affinity::CoreId;
 use criterion::{criterion_group, criterion_main, Bencher, BenchmarkId, Criterion, SamplingMode};
 use rand::Rng;
 
+#[derive(Copy, Clone, Debug)]
+struct Msg<const N_BYTES: usize> {
+    data: [u8; N_BYTES]
+}
+
+impl<const N_BYTES: usize> Default for Msg<N_BYTES> {
+    fn default() -> Self {
+        Self {data: [0; N_BYTES]}
+    }
+}
+
 fn write_bench<const N_BYTES: usize>(b: &mut Bencher, n_contenders: usize) {
     std::thread::scope(|s| {
-        let lock = Arc::new(code::SeqLock::default());
+        let lock = Arc::new(code::Seqlock::default());
         for i in 0..n_contenders {
             let lock2 = lock.clone();
             s.spawn(move || {
                 core_affinity::set_for_current(CoreId { id: 2 * i + 3 });
-                let mut m = code::Message::<N_BYTES>::default();
+                let mut m = Msg::<N_BYTES>::default();
                 loop {
                     lock2.read(&mut m);
-                    if m[0] == 1 && m[1] == 2 {
+                    if m.data[0] == 1 && m.data[1] == 2 {
                         break;
                     }
                 }
@@ -27,17 +38,17 @@ fn write_bench<const N_BYTES: usize>(b: &mut Bencher, n_contenders: usize) {
         std::thread::sleep(Duration::from_millis(1));
         s.spawn(move || {
             core_affinity::set_for_current(CoreId { id: 1 });
-            let mut m = code::Message::<N_BYTES>::default();
-            let mut c = 0usize;
+            let mut m = Msg::<N_BYTES>::default();
+            let mut c = 0u8;
             b.iter(|| {
                 c = c.wrapping_add(1);
-                m[0] = c;
-                m[1] = c;
+                m.data[0] = c;
+                m.data[1] = c;
                 lock.write(&m)
             });
-            m[0] = 1;
+            m.data[0] = 1;
             for i in 1..N_BYTES {
-                m[i] = 2;
+                m.data[i] = 2;
             }
             lock.write(&m);
         });
@@ -90,12 +101,11 @@ fn write(c: &mut Criterion) {
 }
 
 fn read_bench<const N_BYTES: usize>(b: &mut Bencher, n_contenders: usize) {
-
     b.iter_custom(|iters| {
         std::thread::scope(|s| {
             let clock = quanta::Clock::new();
             clock.now();
-            let lock = Arc::new(code::SeqLock::default());
+            let lock = Arc::new(code::Seqlock::default());
             let done = Arc::new(sync::atomic::AtomicBool::new(false));
             let done1 = done.clone();
             let lock1 = lock.clone();
@@ -104,10 +114,10 @@ fn read_bench<const N_BYTES: usize>(b: &mut Bencher, n_contenders: usize) {
                 let lock2 = lock.clone();
                 s.spawn(move || {
                     core_affinity::set_for_current(CoreId { id: 2 * i + 3 });
-                    let mut m = code::Message::<N_BYTES>::default();
+                    let mut m = Msg::<N_BYTES>::default();
                     loop {
                         lock2.read(&mut m);
-                        if m[0] == 1 && m[1] == 2 {
+                        if m.data[0] == 1 && m.data[1] == 2 {
                             break;
                         }
                     }
@@ -116,7 +126,7 @@ fn read_bench<const N_BYTES: usize>(b: &mut Bencher, n_contenders: usize) {
             let out = s.spawn(move || {
                 core_affinity::set_for_current(CoreId { id: 3 });
                 let lck = lock2.as_ref();
-                let mut m = code::Message::<N_BYTES>::default();
+                let mut m = Msg::<N_BYTES>::default();
                 let mut avg_lat = 0;
                 let mut last = 0;
                 for i in 0..iters {
@@ -124,7 +134,7 @@ fn read_bench<const N_BYTES: usize>(b: &mut Bencher, n_contenders: usize) {
                         let curt = rdtscp();
                         let c = lck.read(&mut m);
                         let delta = rdtscp() - curt;
-                        if m.data[0] != last && c == 2{
+                        if m.data[0] != last {
                             last = m.data[0];
                             avg_lat += delta;
                             break;
@@ -136,8 +146,8 @@ fn read_bench<const N_BYTES: usize>(b: &mut Bencher, n_contenders: usize) {
             });
             s.spawn(move || {
                 core_affinity::set_for_current(CoreId { id: 1 });
-                let mut m = code::Message::<N_BYTES>::default();
-                let mut c = 0usize;
+                let mut m = Msg::<N_BYTES>::default();
+                let mut c = 0u8;
                 let mut rng = rand::thread_rng();
                 let lck = lock1.as_ref();
                 loop {
@@ -150,8 +160,8 @@ fn read_bench<const N_BYTES: usize>(b: &mut Bencher, n_contenders: usize) {
                     }
                     while rdtscp() - last_write < 330 {}
                 }
-                m[0] = 1;
-                m[1] = 2;
+                m.data[0] = 1;
+                m.data[1] = 2;
                 lck.write(&m);
             });
             out.join().unwrap()
@@ -228,7 +238,7 @@ fn latency_bench<const N_BYTES: usize>(b: &mut Bencher, n_contenders: usize) {
             let clock = quanta::Clock::new();
             clock.now();
 
-            let lock = Arc::new(code::SeqLock::default());
+            let lock = Arc::new(code::Seqlock::default());
             let done = Arc::new(sync::atomic::AtomicBool::new(false));
             let done1 = done.clone();
             let lock1 = lock.clone();

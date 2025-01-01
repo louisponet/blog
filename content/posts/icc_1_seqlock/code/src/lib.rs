@@ -1,5 +1,5 @@
 use std::{
-    arch::x86_64::_mm_pause,
+    arch::{asm, x86_64::_mm_pause},
     cell::UnsafeCell,
     slice::SliceIndex,
     sync::atomic::{compiler_fence, fence, AtomicUsize, Ordering},
@@ -90,6 +90,9 @@ impl<T: Copy> Seqlock<T> {
         unsafe { *self.data.get() = *val };
         compiler_fence(Ordering::AcqRel);
         self.version.store(v.wrapping_add(2), Ordering::Release);
+        // unsafe {
+        //     asm!("cldemote [{}]", in(reg) &self);
+        // }
     }
 }
 

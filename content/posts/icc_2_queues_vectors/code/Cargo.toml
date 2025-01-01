@@ -9,6 +9,7 @@ rand = "0.8.5"
 ma_timing = {git = "https://github.com/louisponet/ma_timing"}
 ma_time =   {git = "https://github.com/louisponet/ma_timing"}
 thiserror = "*"
+parking_lot = "0.12.3"
 [dev-dependencies]
 criterion = "*"
 quanta = "*"

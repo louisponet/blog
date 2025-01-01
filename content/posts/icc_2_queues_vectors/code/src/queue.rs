@@ -130,6 +130,7 @@ impl<T: Copy> Queue<T> {
             q.header.mask = mask;
             q.header.elsize = elsize as u32;
             q.header.is_initialized = true as u8;
+            q.header.count = AtomicUsize::new(0);
             Ok(q)
         }
     }

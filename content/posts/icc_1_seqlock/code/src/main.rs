@@ -118,7 +118,7 @@ fn timed_consumer(lock: &Seqlock<TimingMessage>)
     let mut last = m.rdtscp;
     while m.data[0] == 0 {
         timer.start();
-        lock.read(&mut m);
+        lock.pessimistic_read(&mut m);
         if m.rdtscp != last {
             timer.stop_and_latency(m.rdtscp);
         }
@@ -132,7 +132,7 @@ fn producer(lock: &Seqlock<TimingMessage>)
     core_affinity::set_for_current(CoreId { id: 2 });
     let mut m = TimingMessage { rdtscp: Instant::now(), data: [0]};
     let curt = Instant::now();
-    while curt.elapsed() < Nanos::from_secs(5) {
+    while curt.elapsed() < Nanos::from_secs(6) {
         timer.start();
         m.rdtscp = Instant::now();
         lock.write(&m);
